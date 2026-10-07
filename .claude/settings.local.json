@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import torch; print\\(f'PyTorch {torch.__version__}'\\); print\\(f'CUDA: {torch.cuda.is_available\\(\\)}'\\)\")",
+      "Bash(curl -sL --max-time 30 \"https://data.matr.io/1/api/v1/projects\")"
+    ]
+  }
+}

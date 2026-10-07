@@ -1,0 +1,1032 @@
+                                   Journal of Energy Storage 167 (2026) 122408
+                                   Contents lists available at ScienceDirect
+
+                              Journal of Energy Storage
+
+                            journal homepage: www.elsevier.com/locate/est
+
+Research papers
+
+Towards trustworthy lithium-ion battery remaining useful life prediction
+with uncertainty quantification
+
+Zhibin Zhao a , Mingqi Feng a, Qiuyu Yu a, Hongming Yuan a, Fujin Wang a,b ,, Zhi Zhai a,
+
+a School of Mechanical Engineering, Xi'an Jiaotong University, Xi'an, 710049, PR China
+b Faculty of Mechanical and Electrical Engineering, Kunming University of Science and Technology, Kunming, 650500, PR China
+
+ARTICLE INFO                ABSTRACT
+
+Keywords:                   With the rapid growth of electric vehicles and renewable energy storage systems, lithium-ion batteries have
+Remaining useful life       become a cornerstone of modern energy infrastructure, making accurate and trustworthy remaining useful life
+Uncertainty quantification  (RUL) prediction crucial for operational safety. However, most existing data-driven models predominantly
+Deep evidential regression  focus on deterministic point estimates while overlooking the underlying prediction uncertainty, which
+Lithium-ion battery         severely undermines the trustworthiness of RUL predictions in safety-critical applications. This paper proposes
+Trustworthiness             a Sparsely-gated Mixture of Experts Long Short-Term Memory (SMoE-LSTM) model for trustworthy RUL
+                            prediction. The model integrates a sparsely gated mixture of experts with LSTM networks to adaptively
+                            capture complex, multi-stage degradation dynamics. The model further incorporates deep evidential regression.
+                            This allows for the simultaneous output of RUL estimates and decoupled uncertainties in a single forward
+                            propagation. Experimental validation on the MIT-Stanford dataset demonstrates that the proposed method
+                            achieves an average RMSE of 16.11 and an R2 of 0.9821, outperforming baseline methods in both accuracy and
+                            uncertainty calibration. Moreover, its single-pass inference design provides substantially higher computational
+                            efficiency than MC Dropout and ensemble methods, making it more suitable for real-time battery management
+                            systems.
+
+1. Introduction                                                                Existing methods for predicting the RUL of lithium-ion batteries
+                                                                           are generally divided into two categories [12]: model-driven and data-
+    Amid global efforts to achieve carbon neutrality and transform         driven approaches. Model-driven methods establish physical models
+energy systems, renewable energy-dominated systems and low-carbon          to describe the battery degradation process [13], with the goal of
+transportation are experiencing unprecedented growth [1,2]. Lithium-       constructing relationships between observable parameters and aging
+ion batteries have become a key energy storage solution supporting         indicators. These can be further classified into empirical models and
+this transformation due to their high energy density, long cycle life,     physical models. Empirical models are based on mathematical repre-
+and environmental friendliness [3,4]. These batteries are widely used      sentations of capacity fade trajectories, such as polynomial, double-
+in core energy systems of advanced facilities, such as energy storage      exponential, and logarithmic models [14­16]. Through data fitting,
+power stations [5], electric vehicles [6], electric vertical take-off and  they map cycle counts to maximum available capacity, enabling RUL
+landing aircraft [7], and aerospace systems [8]. However, the stochas-     estimation and projection of future degradation trends. Physical mod-
+tic nature of battery degradation and complex operating conditions         els capture complex electrochemical reactions and aging mechanisms,
+render batteries susceptible to safety risks, such as capacity fade and    making them suitable for adaptive modeling under varying operating
+thermal runaway [9­11]. These uncertainties pose severe challenges to      conditions [17­19]. However, model-driven approaches depend on
+the trustworthiness of battery management systems (BMS). Therefore,        accurate physicochemical parameters, which are often difficult to ob-
+remaining useful life (RUL) prediction methodologies must evolve from      tain, and typically involve complex equations and high computational
+seeking mere accuracy to achieving quantifiable trustworthiness. A         costs. In contrast, data-driven methods can capture complex nonlin-
+trustworthy RUL prediction requires not only precise estimations but       ear degradation patterns directly from historical data without relying
+also the capability to alert users to potential risks through predic-      on detailed physicochemical parameters [20­22]. Typical approaches
+tive uncertainty, thereby enabling RUL prediction-based maintenance
+strategies.
+
+   Corresponding authors.
+      E-mail addresses: wangfujin@kust.edu.cn (F. Wang), zhaizhi@xjtu.edu.cn (Z. Zhai).
+
+https://doi.org/10.1016/j.est.2026.122408
+Received 14 January 2026; Received in revised form 28 March 2026; Accepted 22 April 2026
+Available online 6 May 2026
+2352-152X/© 2026 Elsevier Ltd. All rights are reserved, including those for text and data mining, AI training, and similar technologies.
+Z. Zhao et al.                                                                                                                             Journal of Energy Storage 167 (2026) 122408
+
+include autoregressive models, Multi-Layer Perceptrons (MLP), Con-              that the battery is operating in a state that is insufficiently repre-
+volutional Neural Networks (CNN), and Recurrent Neural Networks                 sented in the training data, suggesting the need for more conservative
+(RNN), which model the temporal relationship between input variables            control strategies. This decomposition provides the reason behind an
+and RUL. Park et al. [23] proposed a hybrid deep learning model that            unreliable prediction, fundamentally enhancing the transparency and
+integrates LSTM attention mechanisms with MLP to improve prediction             trustworthiness of the RUL prediction.
+accuracy by focusing on both statistical and domain-specific features.
+Chen et al. [24] developed TOP-Net, a parallel hybrid network com-                  UQ in lithium-ion battery RUL prediction currently relies primarily
+bining CNN and LSTM, to achieve accurate early-cycle life and RUL               on three methodological approaches: Bayesian neural networks, Gaus-
+prediction for lithium-ion batteries under diverse operating conditions.        sian Process Regression (GPR), and ensemble methods [36]. Bayesian
+                                                                                neural networks characterize epistemic uncertainty at the model pa-
+    Among these methods, the Long Short-Term Memory (LSTM) net-                 rameter level by imposing prior distributions on network weights
+work has been adopted extensively in the field of battery RUL pre-              and transforming them into posterior distributions [37,38]. Zhang
+diction, owing to its capacity to capture long-term dependencies in             et al. [39] proposed a Bayesian hybrid neural network framework
+capacity fade [25­27]. Zraibi et al. [28] compared DNN, RNN, GRU,               that uses variational Bayesian inference to output predictive distribu-
+and LSTM models, finding that LSTM achieved superior performance                tions. This improves the accuracy and stability of RUL prediction and
+in battery RUL prediction with lower prediction errors relative to the          provides uncertainty estimates. Ke et al. [40] developed a Bayesian
+other methods. To improve model robustness and adaptability, the                neural network using Monte Carlo sampling and variational inference
+Mixture of Experts (MoE) framework has emerged as a promising                   to account for prediction uncertainty. Gaussian process regression is
+solution [29­31]. Through a gating mechanism, MoE dynamically as-               a non-parametric Bayesian method that defines priors directly in the
+signs different experts to different degradation patterns, which helps          function space and derives complete posterior predictive distributions
+reduce modeling bias caused by heterogeneous aging trajectories. Chen           via covariance kernel functions. This method naturally offers built-in
+and Zhou [32] proposed an AttMoE network that integrates attention              UQ. Liu et al. [41] proposed an LSTM+GPR hybrid framework that
+mechanisms with a MoE layer, where multiple specialized experts                 uses the empirical mode decomposition to split battery capacity data
+collaboratively enhance the model's ability to capture diverse degra-           into some Intrinsic Mode Functions (IMFs) and a residual, LSTM to fit
+dation patterns, thereby improving the accuracy of RUL prediction.              the residual for long-term dependence, and GPR to capture IMFs with
+Dong et al. [33] proposed LB-DeformNet, which incorporates a Load-              uncertainty. Ensemble methods reduce variance and bias at the system
+Balancing Restriction MoE to ensure uniform expert activation, thereby          level by constructing and combining predictions from multiple het-
+enhancing model capacity and representation diversity for more robust           erogeneous base learners [42,43]. Epistemic uncertainty is estimated
+lithium-ion battery RUL prediction. The integration of diverse experts          by evaluating disagreement among the models. Hu and Wang [44]
+enables the capture of a wider spectrum of patterns in the data,                proposed a two-stage ensemble training approach that incorporates
+resulting in enhanced overall performance and more comprehensive                a cosine annealing strategy to improve stochastic weight averaging,
+representations.                                                                along with a quantile regression method to quantify uncertainty in RUL
+                                                                                prediction, thereby mitigating the overconfidence issue often associated
+    However, conventional data-driven methodologies frequently yield            with ensemble methods.
+deterministic point estimates of RUL, whereas real-world battery opera-
+tion is characterized by variable conditions and intricate electrochemi-            While UQ methods for battery RUL prediction have been prelim-
+cal processes. As intuitively illustrated in Fig. 1(a), battery degradation     inary investigated, existing approaches exhibit notable limitations re-
+is a highly non-linear process where prediction errors are not static;          garding practical trustworthiness. Bayesian methods incur substantial
+instead, they exhibit a cumulative propagation effect due to the re-            computational overhead due to their reliance on repeated sampling,
+cursive nature of RUL estimation. As the aging process evolves, these           and their theoretical complexity often hinders the effective decompo-
+accumulated errors lead to diverging degradation trajectories, making a         sition of uncertainty in practice. Gaussian process regression is con-
+single point estimate inherently insufficient and potentially misleading.       strained by its kernel design, which limits scalability, complicates the
+Fig. 1(b) highlights the critical necessity for trustworthy RUL predic-         handling of high-dimensional battery data, and prevents end-to-end
+tion. In the context of BMS, relying solely on point estimates may lead         feature learning [45]. Although ensemble methods can improve pre-
+to misguided maintenance decisions and increased costs. Therefore,              diction robustness, they cannot explicitly distinguish between different
+the provision of RUL predictions accompanied by Uncertainty Quan-               sources of uncertainty, and their multi-model architecture leads to high
+tification (UQ) is essential [34]. A trustworthy RUL prediction should          costs in both training and inference [46]. In contrast, Deep evidential
+not only provide an accurate estimate but also deliver well-calibrated          regression offers a paradigm shift towards efficient trustworthiness.
+quantification of its own reliability. This enables decision-makers to          As compared in Fig. 1(c), unlike Bayesian or Ensemble approaches
+understand the limitations and risks associated with the prediction,            that require complex sampling or multiple model runs, deep evidential
+thereby supporting well-informed judgments in maintenance planning              regression models the higher-order evidential distribution to simulta-
+and system management.                                                          neously output RUL prediction and decoupled uncertainty estimates
+                                                                                in a single forward pass [47,48]. This characteristic perfectly satisfies
+    Therefore, establishing a trustworthy RUL prediction necessitates           the real-time performance and trustworthiness requirements in RUL
+advanced UQ capabilities, specifically the ability to decompose uncer-          prediction.
+tainty into its constituent sources. The classification of uncertainty is
+typically based on its source, with epistemic uncertainty and aleatoric             In summary, despite advancements in data-driven methodologies
+uncertainty being the two primary categories [35]. Epistemic uncer-             and UQ techniques, a critical research gap persists in achieving a syn-
+tainty, which stems from a lack of knowledge within the model, can              ergistic balance among model adaptiveness, computational efficiency,
+be attributed to factors such as the lack of training data or the im-           and uncertainty interpretability. Existing UQ frameworks primarily rely
+proper configuration of the model architecture. This uncertainty can            on static network architectures that struggle to capture the highly het-
+be mitigated through the augmentation of datasets or the refinement of          erogeneous and multi-stage nature of battery degradation. Meanwhile,
+the model itself. Conversely, aleatoric uncertainty captures the inherent       traditional UQ approaches impose prohibitive computational burdens
+randomness or noise present in the data, which remains unavoidable              due to repeated sampling or ensemble execution, and frequently fail to
+even when employing a perfect model. For a trustworthy prediction,              explicitly decouple aleatoric and epistemic uncertainties [49]. More-
+the model should distinguish between these two uncertainty sources.             over, most existing methods operate as black box models with limited
+High aleatoric uncertainty may indicate noisy operating conditions and          explainability. They provide predictions without revealing why certain
+the need for signal filtering. High epistemic uncertainty may indicate          decisions are made or what factors contribute to the model's confi-
+                                                                                dence. This lack of transparency further undermines trustworthiness,
+
+                                                                             2
+Z. Zhao et al.                                                               Journal of Energy Storage 167 (2026) 122408
+
+Fig. 1. Conceptual framework illustrating the necessity of trustworthy RUL prediction. (a) Illustration of the cumulative error propagation effect caused by non-
+linear battery degradation. As prediction horizons extend, deterministic point estimates fail to capture the naturally diverging trajectories, whereas probabilistic
+bounds visually reflect this accumulating uncertainty. (b) Uncertainty quantification aids in risk-aware maintenance cost analysis. (c) Methodological comparison
+demonstrating the superiority of deep evidential regression in terms of inference efficiency and uncertainty decoupling compared to Ensemble and Bayesian
+approaches.
+
+particularly in safety-critical battery management applications [50].                 (NIG) prior, the proposed method achieves explicit decompo-
+Therefore, there remains an urgent need for a unified and trustworthy                 sition of aleatoric and epistemic uncertainties, providing well-
+framework for battery RUL prediction. Such a framework should adapt                   calibrated confidence intervals without computationally expen-
+to complex aging mechanisms, provide instantaneous and sampling-free                  sive sampling.
+uncertainty quantification, explicitly decouple aleatoric and epistemic           3. Comprehensive validation on the MIT-Stanford dataset demon-
+uncertainties, and offer interpretable insights into its decision-making              strates that the proposed method offers a superior trade-off
+process.                                                                              between accuracy and efficiency. It significantly improves un-
+                                                                                      certainty calibration compared to baseline methods, providing a
+    This paper proposes a Sparsely-gated Mixture of Experts Long Short-               verifiable and transparent solution for trustworthy battery RUL
+Term Memory (SMoE-LSTM) model for lithium-ion battery RUL pre-                        prediction.
+diction with UQ. The proposed framework also improves model inter-
+pretability from two aspects. On the structural side, the sparse gating          The remainder of this paper is organized as follows: Section 2
+mechanism makes it possible to examine which experts are activated           elaborates on the relevant theoretical foundations. Section 3 details
+under different degradation conditions. On the predictive side, the          the proposed methodology. Section 4 describes the experimental setup
+explicit decomposition of aleatoric and epistemic uncertainties helps        and presents an analysis and discussion of the experimental results.
+explain whether low-confidence predictions are mainly associated with        Section 5 presents the conclusions of the study.
+data noise or limited model knowledge. The primary contributions of
+this study are as follows:                                                   2. Preliminaries
+
+     1. A collaborative SMoE-LSTM framework is constructed to ro-            2.1. Long short-term memory network
+         bustly model complex, multi-stage degradation dynamics. By
+         adaptively fusing expert knowledge, this architecture enhances          The LSTM network is a variant of recurrent neural networks that
+         the model's generalization capability across diverse operating      effectively regulates the accumulation and transfer of information
+         conditions, ensuring prediction reliability                         through its gating mechanisms [51]. The LSTM gating mechanism
+                                                                             addresses the vanishing gradient issues common in traditional RNN
+     2. A trustworthy UQ mechanism based on deep evidential regres-          when processing long sequential data. This architecture has been
+         sion is introduced. By employing the Normal-Inverse-Gamma           demonstrated to exhibit particular strengths in terms of its ability to
+
+                                                                          3
+Z. Zhao et al.                                                                                                          Journal of Energy Storage 167 (2026) 122408
+
+                                                                      Fig. 2. Basic LSTM unit.
+
+capture long-range dependencies within time series, as illustrated by                   where () denotes the loss function.
+its detailed structure in Fig. 2.                                                           Assuming that the observations  are drawn independently and
+
+    The core mechanism of LSTM lies in its cell state, where three gating               identically distributed (i.i.d.) from a Gaussian distribution   
+structures work collaboratively to determine: the extent to which infor-                (, 2) with unknown mean  and variance 2, the objective is to
+mation from the previous state is forgotten; the degree to which new
+information at the current timestep is incorporated; and the informa-                   estimate these parameters probabilistically. Rather than predicting 
+tion ultimately output to the hidden state. In consideration of the input               and 2 directly, deep evidential regression places a higher-order prior
+ and the preceding hidden state -1, an LSTM unit updates its cell                       distribution over (, 2). This prior is chosen to be the NIG distribution,
+state , consequently yielding the present hidden state  through the
+implementation of the ensuing gating operations. The computational                      which serves as the conjugate prior for the Gaussian likelihood and
+procedure can be summarized as follows:
+                                                                                        enables analytical inference, which is defined as follows:
+
+                                                                                                                   (1   )+1
+                                                                                                         =           2
+                                                                                        (,  2 , ,  ,  )
+                                                                                               |                 
+                                                                                                            () 22
+ =  (  [-1, ] +  )                                                                                                               (8)
+                                                                            (1)
+                                                                                                                { 2 + ( - )2 }
+ = (  [-1, ] + )                                                            (2)                          × exp -
+
+                                                                                                                             22
+
+ = tanh(  [-1, ] +  )                                                       (3)         where  () denotes the gamma function, and  = (, , , ) represents
+                                                                                        the four hyperparameters of the NIG distribution, with   R,  > 0,
+ =   -1 +                                                                   (4)          > 1 and  > 0. Here,  indicates the center of the prior mean, 
+                                                                                        reflects the confidence in the mean estimate and relates to the number
+ = ([-1, ] + )                                                              (5)         of pseudo-observations, while  and  jointly control the confidence in
+                                                                                        the variance estimate.
+ =   tanh ()                                                                (6)
+                                                                                            The parameters of this conjugate prior distribution can be inter-
+where , , and  represent the activation vectors of the forget                           preted in a way that is consistent with common sense, in that they
+gate, input gate, and output gate, respectively;  and  denote the                       correspond to pseudo-observations that support specific properties. The
+sigmoid and hyperbolic tangent activation functions;  and  are the                      total evidence  of this evidential distribution, defined as the sum
+corresponding weight matrices and bias terms; and  indicates the                        of all inferred pseudo-observation counts  = 2 + , reflects the
+element-wise multiplication operation.                                                  model's overall confidence in the current prediction. By training a
+                                                                                        neural network to predict  directly from input data, the model learns
+2.2. Deep evidential regression theory                                                  to express both the predicted target and the associated evidence in a
+                                                                                        single forward pass, without the need for sampling during inference or
+Deep evidential regression is an emerging approach for UQ, which                        out-of-distribution data during training.
+
+constructs higher-order probabilistic models by introducing evidence                        This theory shifts uncertainty modeling from the weight space to
+                                                                                        the likelihood parameter space, offering a scalable and sampling-free
+priors to provide calibrated and decomposable uncertainty estimates                     alternative for UQ in regression tasks.
+
+for regression tasks [52]. The fundamental premise of this approach
+
+is to circumvent the conventional approach of directly estimating the
+
+mean and variance of the target variable. Instead, it employs the                       3. Methodology
+
+establishment of a probabilistic model for the parameters of these like-
+
+lihood functions, thereby encapsulating both aleatoric and epistemic
+
+uncertainty [53].                                                                           This section delineates a framework for lithium-ion battery RUL
+                                                                                        prediction. The methodology is structured around three core compo-
+In  the  context   of  a  regression  problem  with  a  dataset    =  {,    }     ,     nents to address the challenges of complex degradation dynamics and
+                                                                                        inherent data variability. First, a rolling sampling strategy is introduced
+                                                                              =1        to construct sequential training samples and enable dynamic, cycle-by-
+                                                                                        cycle RUL estimation. Second, a multi-source feature extraction scheme
+the objective is to learn a functional mapping  , parameterized by a set                is detailed, encompassing tailored methods for charging, discharging,
+                                                                                        and summary data to comprehensively characterize battery health
+of weights , that provides a reliable approximation to the solution to
+
+the following optimization problem:
+
+                   1   
+                   
+ ();  ()        =                                                           (7)
+                          ()
+  
+                       =1
+
+                                                                                     4
+Z. Zhao et al.                                                                                                    Journal of Energy Storage 167 (2026) 122408
+
+                         Fig. 3. Schematic of the rolling sampling strategy for RUL prediction.
+
+states. Finally, the core predictive and UQ model is presented, which          Table 1
+integrates a collaborative fusion model of SMoE and LSTM for capturing         Features and their meanings.
+complex temporal patterns with a deep evidential regression layer
+to jointly output point predictions and well-calibrated epistemic and          Feature             Meaning
+aleatoric uncertainties in a single forward pass.
+                                                                               1, ... , 6          Resampled voltage data within the [cutoff - 0.2 V, cutoff]
+3.1. Rolling sampling method for lithium-ion battery RUL                                           interval during the CC charging phase, where cutoff denotes
+                                                                               1, ... , 6          cut-off voltage.
+    This paper employs a sliding window-based RUL dynamic rolling                                  Resampled current data within the [0.5 A, 0.1 A] range during
+prediction method, as illustrated in Fig. 3, enabling the prediction           1                   the CV charging phase.
+to continuously update as the cycle progresses. During the training            2                   Peak value in the IC curve during discharge.
+phase, the complete lifecycle data are utilized. Commencing from the           3                   Peak voltage position in the IC curve during discharge.
+initial cycle, a sliding window of a fixed length l traverses the entire       4                   Internal resistance at full charge.
+degradation process. Within each designated window, the extraction of                              Maximum discharge capacity of the battery.
+features is contingent upon the utilization of data pertaining exclusively
+to the process variables contained within that particular window. The          the constant voltage phase are selected for analysis, as illustrated in
+RUL label is calculated as the difference between the current cycle            Fig. 4.
+index and the cycle number at the battery's end-of-life (EOL). The
+following formula is used to calculate the RUL label:                              Given the high sampling density of raw data, direct use would in-
+                                                                               troduce redundancy. To reduce dimensionality while preserving degra-
+RUL = EOL - ( + )                                         (9)                  dation trends, cubic spline interpolation is applied to resample each
+                                                                               extracted sequence into a compact vector of length 6, followed by
+                                                                               outlier removal, as illustrated in Fig. 5. The charging features are thus
+                                                                               represented as:
+
+where  denotes the number of window shifts. Each shift yields a                charge = [1, ... , 6, 1, ... , 6]                (10)
+feature sequence of length  and its corresponding RUL label. For a
+battery sample with a total cycle life of , this process can generate              The incremental capacity (IC) curve provides critical insights into
+ -  training samples. During actual operation, this method enables             battery degradation. Characteristic peaks in the IC curve, resulting from
+dynamic rolling output of RUL predictions by continuously collecting           electrode phase transitions, are closely linked to electrochemical state,
+process data cycle-by-cycle and feeding the window features into the           specifically reflecting the loss of active material (LAM) and the loss
+model. Furthermore, the method does not impose strict requirements             of lithium inventory (LLI) during the aging process [54]. As shown in
+on the starting point of the window, allowing it to skip missing cycle         Fig. 6, these peaks attenuate and shift to lower voltages with aging.
+samples during data acquisition. This characteristic makes it partic-          To quantify this, two key features are extracted from the discharge
+ularly suitable for application scenarios where initial data may be            data: the peak amplitude (1) and the corresponding voltage position
+incomplete or collected intermittently, demonstrating strong data fault        (2). The mathematical representation for the discharge phase feature
+tolerance. Overall, this approach provides a feasible pathway for rolling      extraction is formulated as follows:
+RUL prediction of lithium-ion batteries.
+                                                                               discharge = [1, 2]                               (11)
+    Furthermore, given the raw battery dataset's notable presence of
+extreme outliers, which have the potential to adversely affect model               Cycle-level summary data, such as internal resistance and maximum
+prediction performance, these anomalous values are eliminated prior to         discharge capacity, offer a structured view of battery health. Fig. 7
+feature extraction based on the statistical 3 criterion. Missing values        illustrates their evolution: capacity steadily declines while internal
+are subsequently filled using linear interpolation.                            resistance increases, with a strong inverse correlation. A marked ac-
+                                                                               celeration in resistance growth often signals a critical degradation
+3.2. Feature extraction                                                        threshold. Therefore, the per-cycle DC internal resistance (3), which
+                                                                               serves as a macroscopic indicator of solid electrolyte interphase (SEI)
+    To address the issue of intermittent missing data in battery op-           growth and impedance rise [55], and maximum discharge capacity (4)
+eration and enhance model robustness, this work proposes a multi-              are extracted as the core features.
+source feature extraction strategy. Features are derived from three
+complementary aspects of the operational data: charging segments,              summary = [3, 4]                                 (12)
+discharging characteristics, and cycle-level summary statistics.
+                                                                                   The integration of features derived from charge/discharge cycle
+    Lithium-ion battery charging protocols vary widely. However, the           data and summary statistics results in the creation of Table 1, thereby
+constant current constant voltage (CC­CV) phase is universally em-             facilitating the expression of the complete feature set extracted from
+ployed to achieve full charge. This study extracts features from key           the th cycle as follows:
+segments within this final CC­CV stage. Specifically, a short voltage
+segment from the constant current phase and a current segment from              = [,1, ... , ,6, ,1, ... , ,6, ,1, ,2, ,3, ,4]  (13)
+
+                                                                            5
+Z. Zhao et al.                                                                 Journal of Energy Storage 167 (2026) 122408
+
+Fig. 4. Capture segment from charging data. Different colors denote batteries with varying cycle lifetimes, with deep red indicating batteries possessing a longer
+cycle life, while deep blue signifies those with a shorter cycle life.
+
+                                                                               Fig. 5. Interpolated charging segment data.
+
+Fig. 6. IC curve peak value and position. (a) depicts the evolution of the peak magnitude in the IC curves with cycling, (b) shows the corresponding shift in the
+peak voltage position across cycles.
+
+Fig. 7. Evolution of internal resistance and maximum discharge capacity over cycle count. (a) illustrates the evolution curve of internal resistance over cycle
+count, (b) depicts the variation in maximum discharge capacity across cycles.
+
+    Significant discrepancies in scale and unit of measurement are             The IC-based features (1, 2) characterize electrode phase-transition
+evident among the multi-source features that have been extracted. For          behavior and are closely related to LAM and LLI. In addition, the
+instance, characteristic values such as voltage, current, capacity, and        increase in DC internal resistance (3) reflects impedance growth,
+resistance are distributed across disparate numerical ranges, while the        while the maximum discharge capacity (4) indicates the overall health
+RUL label predicted by the model, expressed in cycle count, operates           state of the battery. Together, these physically meaningful features
+on a numerical magnitude substantially higher than other features.             provide a sound basis for subsequent RUL prediction and uncertainty
+In order to enhance the stability, accuracy, and convergence effi-             quantification.
+ciency of model training, this study uses Min­Max normalization to
+synchronously process all features and labels.                                 3.3. SMoE-LSTM model
+
+    In summary, the selection of this multi-source feature set is not          3.3.1. Sparsely-gated mixture of experts
+merely driven by empirical data variance, but is deeply grounded in                The MoE layer consists of a set of  ``expert networks'' 1, ... , ,
+the fundamental electrochemical mechanisms of battery degradation.
+Specifically, the charging features (1..6, 1..6) reflect changes in polar-     and a ``gating network''  whose output is a sparse -dimensional
+ization and electrochemical impedance during repeated fast cycling.            vector. Fig. 8 shows an overview of the MoE module. The experts
+
+                                                                            6
+Z. Zhao et al.                                                                                          Journal of Energy Storage 167 (2026) 122408
+
+                                            Fig. 8. The structure of SMoE.
+
+are themselves neural networks, each with their own parameters. The            representations. These features are then passed to the evidence layer,
+output  of the MoE module can be written as follows:
+                                                                               which employs fully connected networks to output four parameters
+
+                                                                               (, , , ) that collectively define the posterior distribution of the target
+
+                                            (14)                               variable, i.e. the NIG distribution. This distribution provides a point
+ = ()()
+                                                                               estimate of the RUL and explicitly quantifies the predictive uncertainty.
+       =1
+
+where () and () denote the output of the gating network and the                To enhance the accuracy and robustness of lithium-ion battery
+output of the th expert network for a given input .
+                                                                               RUL prediction, the feature extractor in the proposed model adopts a
+    The gating network is responsible for dynamically calculating the
+weight allocation of each expert's output in the final prediction based        collaborative fusion model of SMoE and LSTM. This design combines
+on the input feature . Its output is a non-negative vector () =
+[()1, ()2, ... , () ], where () represents the weight of the th                the advantages of time-series modeling and multi-subspace representa-
+expert. A straightforward non-sparse gating function scheme proposed
+by Jacob et al. [56] involves multiplying the input by a trainable weight      tion, enabling effective capture of long-term dependencies and complex
+matrix  and subsequently applying the Softmax function.
+                                                                               degradation patterns during battery aging. The resulting high dimen-
+
+                                                                               sional feature representations, which are subsequently passed to the
+
+                                                                               evidence layer, are generated by processing the battery data through
+
+                                                                               this feature extractor.
+
+ () = Softmax(  )                           (15)                               The mathematical modeling details of the evidence layer are also
+
+                                                                               illustrated in Fig. 9. In the context of the regression task, it is hy-
+
+    Jacobs' method assigns non-zero weights to all experts. Although           pothesized that the target values  are drawn from an i.i.d. Gaussian
+it has flexible parameters, it has a large computational cost and lacks
+sparse control capability. To enhance the sparsity of the model and the        observation model    (, 2). In contrast to conventional re-
+expert load balancing capability, this paper uses an improved sparse           gression methodologies that predict deterministic means and variances
+gating mechanism, termed the noisy Top-K gating mechanism [57].
+This method adds noise perturbation on the basis of the standard Soft-         directly, the deep evidential regression approach considers both the
+max gating and retains only the  experts with the strongest responses
+through the Top-K strategy, while the activations of other experts             mean  and the variance 2 as unknown random variables. The con-
+are forced to be 0, achieving sparse activation. Its overall calculation                                                  (               )
+process is as follows:
+                                                                               struction of a higher-order posterior distribution  , 2| is achieved
+                                                                                                                                       |
+
+                                                                                                                                       |
+
+                                                                               through the placement of a conjugate prior, specifically the NIG distri-
+
+                                                                               bution, over the specified unknowns. The prior is characterized by four
+
+                                                                               evidence parameters  = (, , , ), which correspond to the predicted
+
+                                                                               mean, pseudo-count (related to sample size), degrees of freedom, and
+
+() = Softmax(KeepTopK((), ))                (16)                               scale, respectively. Each of these parameters has a clear statistical
+
+                                                                               interpretation.
+
+() = StandardNormal()  Softplus((  noise))  (17)                               In summary, the SMoE-LSTM model achieves intrinsic calibration
+           + (   )
+                                                                               and simultaneous decomposition of uncertainty without relying on
+
+                {                                                              external sampling or model ensembles. While maintaining high pre-
+
+KeepTopK(, ) =     , {| > } < .             (18)                               diction accuracy, the method effectively enhances the reliability and
+                   -, otherwise.
+                                                                               confidence of lithium-ion battery RUL prediction, making it suitable for
+
+where  and noise are learnable weights, and the KeepTopK function              practical application in battery management systems. It is noteworthy
+is used to retain the top- largest activation values, while the rest are
+                                                                               that, although numerous post-processing-based uncertainty calibration
+set to -.
+                                                                               methods exist in current research, deep evidential regression accom-
+
+                                                                               plishes intrinsic calibration of predictive uncertainty during model
+
+3.3.2. Overall model structure and evidence layer                              training through an adjustable regularization term, thereby eliminating
+    To effectively achieve UQ in predicting the RUL of lithium-ion
+                                                                               the need for additional post-processing or retraining.
+batteries, this paper designs and implements a SMoE-LSTM Model. In
+contrast to conventional methodologies, such as MC Dropout or model            3.4. Uncertainty quantification mechanism
+ensemble, SMoE-LSTM Model provides point predictions and epistemic
+uncertainty, while also explicitly quantifying aleatoric uncertainty.              The UQ mechanism adopted in this study is built upon the higher-
+                                                                               order evidential regression theory. This theory constructs a second-
+    As demonstrated in Fig. 9, the model is predominantly comprised            order probabilistic model by introducing a NIG evidence prior over
+of a feature extractor and an evidence layer. Initially, the input battery     the Gaussian likelihood, thereby enabling unified modeling of both
+process data is entered into a deep neural network based feature               aleatoric and epistemic uncertainties.
+extractor, which results in the acquisition of high-dimensional feature
+
+                                                                            7
+Z. Zhao et al.                                                                                  Journal of Energy Storage 167 (2026) 122408
+
+                    Fig. 9. The structure of SMoE-LSTM model.
+
+                    Fig. 10. Tunability of evidential uncertainty.
+
+3.4.1. Uncertainty decomposition                                            which cannot be eliminated even with a perfect model. Epistemic
+    Aleatoric uncertainty captures the variability inherent in observa-     uncertainty, on the other hand, reflects the model's knowledge gap due
+                                                                            to insufficient training data and can be reduced by collecting more data.
+tions, even when the same experiment is run repeatedly. Epistemic           It is also important to note that the parameter  directly modulates the
+uncertainty describes the uncertainty in the model's parameter esti-        magnitude of epistemic uncertainty.
+mates. For the NIG distribution, the predicted value and the aleatoric
+and epistemic uncertainties can be derived analytically.
+
+E[] =               (19)                                                    3.4.2. Learning the evidential distribution
+                    (20)
+                    (21)                                                        In the context of lithium-ion battery RUL prediction, well-calibrated
+prediction                                                                  uncertainty is crucial for ensuring the reliability of model predic-
+                                                                            tions. In this context, calibration signifies the consistency between the
+E[2]  =          1                                                          model's predictive uncertainty and the observed errors. During training,
+              -                                                             a joint loss function is employed that is designed to optimize both
+                                                                            model fitting and uncertainty calibration simultaneously. In order to
+                                                                            achieve intrinsic uncertainty calibration, the loss function is defined as
+aleatoric                                                                   follows:
+
+                
+Var[] =
+
+            ( - 1)
+
+
+epistemic
+
+    This decomposition carries distinct physical interpretations.           () = N LL() + R ()  (22)
+Aleatoric uncertainty characterizes the inherent noise in the data,
+
+                                                                         8
+Z. Zhao et al.                                                                                                     Journal of Energy Storage 167 (2026) 122408
+
+where the parameter  governs the trade-off between uncertainty infla-          Table 2                             Detailed configuration
+tion and model fitting. Setting  to 0 results in overconfident estimates,      System and software configuration.
+whereas setting it too high leads to overinflation of uncertainty.                                                 Microsoft Windows 10 Professional
+                                                                                 Parameter                         Intel® CoreTM i5-10400F CPU @ 2.90 GHz
+    N LL() denotes the evidential maximization loss, which aims to                                                 16.0 GB
+align the predicted evidential distribution with the observed data.              Operating system                  NVIDIA GeForce GTX 1660 SUPER
+This is achieved by maximizing the model evidence, i.e. the marginal             CPU                               6 GB
+likelihood. This loss is defined as the negative logarithm of the model          RAM                               conda 23.5.0
+evidence.                                                                        GPU                               Torch 2.0.1
+                                                                                 VRAM
+            1        (    )                                                      Anaconda3
+            2                                                                    PyTorch
+
+N LL()   =      log          -     log()
+
+            +   (    +    1 ) log  ((  -   )2   +   )
+                          2
+
+                                                          (23)                 4.1. Dataset description
+
+                                                                                   This paper uses a lithium-ion battery dataset that has been collab-
+                                                                               oratively developed by the Massachusetts Institute of Technology and
+            + log   ()                                                         Stanford University [58]. The dataset under consideration comprises
+                          (        1)                                          124 commercial LiFePO4 graphite batteries (APR18650M1A) manu-
+                                +  2                                           factured by A123 Systems. Fig. 11 shows the schematic diagram of
+                                                                               the whole cycle test process of the MIT-Stanford dataset. The batteries
+                                                                               were subjected to a series of cycles until they reached the point of
+                                                                               failure under conditions of rapid charging. The nominal capacity of
+where  = 2(1 + ). This loss term is designed to encourage the                  the batteries was established at 1.1 Ah, and the nominal voltage at 3.3
+accumulation of evidence in regions where the data provides support.           V. The EOL point was demarcated as the cycle number at which the
+                                                                               state of health declined to 80%. All batteries were tested in a constant
+    R () denotes the evidence regularization loss, the purpose of which        temperature environment of 30 C and subjected to 72 different fast-
+is to prevent the model from maintaining excessive confidence when             charging protocols. The charging process adopted a two-stage constant
+predictions are erroneous. The introduction of this regularization term        current strategy, denoted as ``C1-C2'', where C1 and C2 represent the
+serves to penalize the total evidence  = 2 +  when prediction errors           constant current values in the first and second stages, respectively. The
+are large. The formulation is as follows:                                      charging rates ranged from 3.6 C to 6 C (where 1C = 1.1 A), with
+                                                                               3.6 C being the manufacturer-recommended fast-charging rate. As the
+R ()  =  ||     -  E[]||        =  ||  -   |    (2  +  )  (24)                 state of charge attained 80%, the secondary charging phase concluded.
+                                           |                                   This was succeeded by a 1C CC­CV charging phase, which persisted
+                                                                               until the SOC reached 100%. During the charging process, the current
+    The regularization term ensures that when the model's prediction           gradually decreased to C/50 once the cut-off voltage was attained, at
+   is accurate, a high level of evidence is maintained without                 which point the charging cycle terminated. In contrast to the hetero-
+penalty. Conversely, when the prediction error | - | is large, the             geneity observed in charging strategies, the discharge process exhibited
+                                                                               uniformity: all batteries were discharged at a constant current rate of
+                                                                   ||          4C, resulting in a decline to a voltage of 2.0 V. The operating voltage
+model is encouraged to reduce its total evidence (2 + ), thereby               range of the batteries was set between 2.0 V and 3.6 V. The present
+increasing its predictive uncertainty. In the context of evidence learn-       study utilizes the ``2017-06-30'' batch of lithium-ion batteries from the
+ing, the network  (; ) generates four values that correspond to the            dataset that was collectively established by the Massachusetts Institute
+parameters . In order to enforce the constraints  > 0,  > 1 and                of Technology and Stanford University. A total of 30 batteries with
+ > 0, the softplus activation function is employed(with an additional          different charging protocols were randomly selected as experimental
++1 being applied to  to ensure  > 1). For   R, a linear activation             subjects, of which 24 were used as the training set and the remaining
+is utilized.                                                                   6 as the test set, designated as #1, #2, #3, #4, #5, and #6.
+
+    The hyperparameter  exerts a direct influence on the magnitude                 We also utilize the XJTU Li-ion battery dataset [59], which com-
+of the model's output uncertainty by controlling the regularization            prises two batches with distinct cycling protocols. Batch-1 consists of 8
+strength. As illustrated in Fig. 10, the regularization coefficient            cells, and Batch-2 consists of 15 cells. For both batches, the first cycle
+governs a critical transition in the model's confidence calibration.           serves as a capacity characterization step: a 0.5 C constant current­
+With increasing  values, the model progresses from an overconfident            constant voltage (CC­CV) charge to 4.2 V with a cutoff current of 0.02
+regime characterized by insufficient uncertainty estimation to an un-          C (40 mA), a 5-min rest, and a 0.2 C (0.4 A) discharge to 2.5 V. In
+derconfident state with excessively inflated uncertainty estimates. This       subsequent cycles, Batch-1 cells are charged at 2.0 C (4 A) with a
+progression culminates in an optimal calibration state at a specific value     CV cutoff of 0.05 C (0.1 A), rested for 5 min, and discharged at 1.0
+denoted as , where the model achieves an optimal balance between               C (2 A) to 2.5 V, followed by a 5-min rest. Batch-2 employs a more
+prediction accuracy and UQ. To establish an equilibrium between                aggressive 3.0 C (6 A) CC­CV charge with the same 0.05 C cutoff, while
+these competing objectives across varying  configurations, this study          the discharge and rest conditions remain identical.
+employed  = 2 for all subsequent experimental evaluations.
+                                                                               4.2. Configuration details
+4. Experiments and results
+                                                                                   As shown in Table 2, all experiments were conducted in an
+    This section provides a comprehensive evaluation of the proposed           Anaconda3-based environment using PyCharm, with PyTorch 2.0.1 as
+SMoE-LSTM model using a public lithium-ion battery dataset. First,             the deep learning framework. The hardware platform consisted of an
+the dataset and preprocessing steps are described, followed by the             Intel®CoreTMi5-10400F CPU, 16 GB RAM, and an NVIDIA GeForce GTX
+implementation details and hyperparameter settings. The predictive             1660 SUPER GPU with 6 GB VRAM, which was sufficient for training
+accuracy and robustness of the model are then validated against several        and evaluating the proposed SMoE-LSTM model with deep evidential
+common deep-learning baselines. Subsequently, an in-depth analysis             regression.
+of the UQ results is presented, covering both epistemic and aleatoric
+uncertainties. Finally, the proposed model is benchmarked against es-
+tablished uncertainty-quantification methods with respect to prediction
+accuracy, computational efficiency, and the quality and calibration
+of uncertainty estimates. Collectively, these experiments demonstrate
+the novelty, effectiveness, and practical relevance of the SMoE-LSTM
+framework for battery management systems.
+
+                                                                            9
+Z. Zhao et al.                                                                                                          Journal of Energy Storage 167 (2026) 122408
+
+Fig. 11. Battery capacity degradation curve. The color coding system employed to denote the cycle life of the battery is as follows: yellow signifies a longer
+cycle life, and dark blue indicates a shorter cycle life.
+
+Table 3                                                                                            1  
+Hyperparameter configuration.                                                                      
+                                                                                         MAE    =            -  |                                    (27)
+                                                                                                          |       |                                  (28)
+                                                                                                          |
+
+Parameter category               Parameter name               Value                                   =1
+
+                                 Input feature dimension      16                         R2  =  1  -         (  -   )2
+                                 Hidden layer dimension       128
+                                 Output dimension             1                                          =1
+                                 Number of experts            10
+                                 Experts per inference step   4                                              (  -  )2
+                                 LSTM layers                  2
+                                                                                                         =1
+                                                              64
+Network architecture                                          100                        where  denotes real value,  denotes predicted value, and  denotes
+                                                              1e-3                       the number of samples.
+                                                              1e-3
+                                 Batch size                   2.0                            In order to mitigate the randomness inherent in neural network
+                                 Training epochs
+                                 Learning rate                42                         training, each method underwent 10 independent experimental tri-
+                                 Weight decay                 Min-Max normalization
+Training parameters              Evidential loss coefficient  Adam                       als on each test cell. In each trial, the training and test sets were
+
+                                                                                         repartitioned, and the model parameters were reinitialized, with the
+
+                                                                                         prediction results recorded. In a single trial, the deep evidential regres-
+
+                                 Random seed                                             sion method required only one training session and one forward pass to
+                                 Data normalization method
+Other parameters                 Optimizer                                               output both predictions and corresponding uncertainty estimates. The
+
+                                                                                         MC Dropout method necessitated the execution of 30 stochastic forward
+
+                                                                                         passes during the prediction phase in order to obtain predictions and
+
+                                                                                         uncertainty, while the model ensemble method involved the training of
+
+    The hyperparameter settings are listed in Table 3. These parameters                  30 independent models, with predictions and uncertainty derived from
+were selected through grid search by considering prediction accuracy,
+training stability, and computational cost. The input dimension was set                  their aggregated outputs. To ensure a rigorous and unbiased evaluation
+according to the extracted battery health features, while the hidden
+dimension and the number of LSTM layers were chosen to ensure ade-                       of the proposed model's intrinsic effectiveness, all baseline models were
+quate temporal representation capability. In the SMoE-LSTM structure,
+the number of experts was set to 10 to provide sufficient model capac-                   carefully configured to maintain a comparable parameter scale and
+ity for capturing diverse battery degradation patterns under different
+operating conditions. Meanwhile, 4 experts were activated at each                        were trained and tested using identical data splits.
+inference step to preserve the sparsity of the mixture-of-experts mech-
+anism. This setting enables the model to benefit from expert diversity                   4.3. Comparative experimental results of model performance
+without incurring excessive computational cost. It also promotes expert
+specialization by avoiding simultaneous activation of all experts.                           To comprehensively evaluate the effectiveness and robustness of the
+                                                                                         proposed SMoE-LSTM under diverse operating conditions, this study
+    For training, the batch size, learning rate, and epoch number were                   compares it with eleven representative baseline models, including con-
+set to achieve stable convergence. Weight decay was introduced to re-                    ventional neural networks such as CNN and MLP, recurrent archi-
+duce overfitting, and the evidential loss coefficient was used to balance                tectures such as GRU, and advanced sequence modeling approaches
+prediction performance and uncertainty learning. In addition, Min-Max                    such as Transformer and RUL-Mamba. In addition to these baseline
+normalization was applied to improve optimization stability, the Adam                    comparisons, an ablation experiment was conducted to explicitly assess
+optimizer was adopted for parameter updating, and the random seed                        the contribution of the sparse mixture of experts module. For this pur-
+was fixed to ensure reproducibility.                                                     pose, a degraded variant of the proposed framework without the SMoE
+                                                                                         component, denoted as Proposed Method (w/o SMoE), was introduced
+    Four metrics were adopted to assess the performance of RUL eval-                     for comparison. The detailed evaluation results of all models on the
+uation methods, which are root mean square error (RMSE), mean                            MIT-Stanford dataset and the two XJTU subsets are summarized in
+absolute percentage error (MAPE), mean absolute error (MAE), and                         Table 4.
+the coefficient of determination (R2). The mathematical expressions for
+these metrics are provided below.                                                            Table 4 presents the performance comparison of different prediction
+                                                                                         models across the MIT-Stanford dataset and two batches of the XJTU
+                                                                                         dataset. Overall, the proposed SMoE-LSTM demonstrates superior pre-
+                                                                                         dictive capability and high robustness. On the MIT-Stanford dataset,
+         1                                                                               the SMoE-LSTM achieves the lowest root mean square error of 16.11,
+RMSE  =                    -   )2                             (25)                       the lowest mean absolute error of 12.77, and the highest coefficient of
+                   (                                          (26)                       determination of 0.9821. Although its mean absolute percentage error
+                                                                                         of 7.42 is marginally higher than the optimal value of 7.11 achieved
+                =1                                                                       by the GRU model, it remains highly competitive. The performance
+
+MAPE     1         |    -     |
+                              |
+                
+
+      =            |             ×  100%
+
+          |                   |
+           =1 |               |
+
+                                                                                     10
+Z. Zhao et al.                                                                                                     Journal of Energy Storage 167 (2026) 122408
+
+                Table 4
+                Prediction performance comparison.
+
+                Model                       MIT-Stanford                    XJTU-batch1                     XJTU-batch2
+
+                                            RMSE MAPE      MAE    R2        RMSE MAPE        MAE    R2      RMSE MAPE     MAE          R2
+
+                CNN                         20.72   9.05   16.54  0.9694    13.38     7.51   10.63  0.9866  21.15  10.16  15.50        0.9361
+                GRU                         17.45   7.11   13.45  0.9777    25.10     8.02   14.83  0.9528  20.21  11.11  14.26        0.9417
+                Attention                   23.37   8.73   17.80  0.9636    34.21     8.32   20.52  0.9123  19.56  11.98  14.09        0.9454
+                MLP                         21.48   8.94   17.54  0.9680    15.49     8.11   10.82  0.9820  19.78  10.41  13.85        0.9441
+                Transformer                 25.93   9.99   18.02  0.9679    13.18     7.72   9.52   0.9870  19.51  10.26  12.28        0.9456
+                PSO-BPNN                    30.66   9.683  24.47  0.8776    43.24     9.76   11.32  0.8600  21.51  10.76  16.21        0.9318
+                Bi-LSTM [60]                27.07   9.79   18.89  0.9344    26.81     9.94   17.04  0.9462  18.78  10.46  13.52        0.9496
+                CNN­LSTM [61]               26.31   10.04  18.06  0.9371    27.23     9.60   17.58  0.9445  20.74  8.76   14.74        0.9386
+                DNN [62]                    24.26   9.79   17.69  0.9406    12.11     9.35   10.43  0.9692  19.06  9.69   13.45        0.9481
+                RUL-Mamba [63]              27.49   9.67   20.69  0.9268    24.09     10.67  12.61  0.9565  19.81  11.71  14.99        0.9421
+                Proposed method (w/o SMoE)  26.42   9.45   18.31  0.9367    24.84     8.54   15.26  0.9538  21.56  8.78   15.43        0.9336
+                Proposed method             16.11   7.42   12.77  0.9821    11.58     8.63   9.63   0.9900  16.91  8.10   10.89        0.9591
+
+consistency of the proposed method is further validated on the XJTU             Table 5
+datasets, which represent vastly different data distributions and operat-       Uncertainty quantification results of the SMoE-LSTM model.
+ing conditions. For XJTU-batch1, which consists of 8 cells tested under
+a 2C discharge rate, the SMoE-LSTM secures the best root mean square            Cell                RMSE                  Epistemic            Aleatoric
+error of 11.58 and the highest coefficient of determination of 0.9900. Its                                                                     uncertainty
+mean absolute error of 9.63 is remarkably close to the optimal value                                                      uncertainty
+of 9.52 produced by the Transformer model. When applied to XJTU-                                                                               47.76
+batch2, which involves a larger scale of 15 cells under a more stressful        #1                  10.27                 5.63                 49.35
+3C discharge rate, the proposed method completely outperforms all                                                                              48.41
+baseline models, sweeping all evaluation metrics with a root mean               #2                  15.19                 5.78                 47.89
+square error of 16.91, a mean absolute percentage error of 8.10, a mean                                                                        47.06
+absolute error of 10.89, and a coefficient of determination of 0.9591.          #3                  22.69                 5.71                 53.16
+This exceptional performance confirms that the SMoE-LSTM effectively
+handles diverse datasets and maintains high accuracy under varying              #4                  18.99                 5.85                 48.94
+discharge conditions and battery sample sizes.
+                                                                                #5                  20.87                 5.59
+    In contrast, several baseline models exhibit noticeable instability or
+performance degradation across different testing scenarios. For exam-           #6                  8.67                  6.36
+ple, PSO-BPNN produces an abnormally high RMSE of 43.24 on XJTU-
+batch1, suggesting that shallow architectures have limited capability           Average             16.11                 5.82
+in characterizing the complex and long-term nonlinear degradation
+behavior of lithium-ion batteries. Similarly, the Attention model shows         Structurally, the sparse gating mechanism of SMoE enables researchers
+considerable fluctuation, with its RMSE reaching 34.21 on XJTU-batch1           to trace which expert sub-networks are activated under different degra-
+but decreasing to 19.56 on XJTU-batch2, which indicates insufficient            dation stages, such as early-cycle fluctuations versus late-stage rapid
+robustness when the data scale and operating conditions change. More            capacity fade, thereby making the model's internal routing behavior
+importantly, the ablation results provide direct evidence of the effec-         transparent. Predictively, the explicit decomposition of aleatoric and
+tiveness of the SMoE module. Compared with Proposed Method (w/o                 epistemic uncertainties offers a clear rationale for why a prediction
+SMoE), the complete Proposed Method consistently achieves better                may be unreliable. High aleatoric uncertainty flags inherent data noise,
+results on all three datasets. Specifically, the RMSE decreases from            while high epistemic uncertainty signals that the model is encountering
+26.42 to 16.11 on the MIT-Stanford dataset, from 24.84 to 11.58                 unfamiliar degradation states. The results of the proposed model with
+on XJTU-batch1, and from 21.56 to 16.91 on XJTU-batch2. Similar                 regard to UQ were summarized in Table 5. The RMSE across all six test
+improvements are also observed in MAE and 2. These results clearly              cells was 16.11, establishing a solid baseline for prediction accuracy.
+demonstrate that removing the SMoE module leads to a substantial                Crucially for trustworthiness, the model effectively distinguishes be-
+decline in predictive performance. This performance gap can be at-              tween uncertainty sources. As shown in Table 5, epistemic uncertainty
+tributed to the fact that a single homogeneous temporal modeling                is consistently lower than aleatoric uncertainty. This indicates that
+architecture is often insufficient to characterize the diverse and nonsta-      the proposed model is indeed capable of successfully learning the
+tionary degradation trajectories of batteries under different operating         underlying degradation patterns of the batteries. The relatively elevated
+regimes. By incorporating the sparse mixture of experts mechanism,              aleatoric uncertainty was indicative of the inherent noise level present
+the proposed model is able to dynamically route heterogeneous degra-            in the battery data.
+dation patterns to specialized expert subnetworks, thereby reducing
+feature interference, enhancing representation capacity, and ultimately             Fig. 12 illustrates the evolution of both uncertainty types during the
+improving prediction accuracy and cross-condition generalization.               prediction process. It has been observed that during the early prediction
+                                                                                phase (i.e. when far from the EOL), both types of uncertainty remained
+4.4. Analysis of uncertainty quantification                                     elevated. This phenomenon occurs because the complex degradation
+                                                                                patterns in the initial stages often correlate poorly with the final failure.
+    The SMoE-LSTM model requires only a single forward pass to                  Concurrently, the impact of inherent data noise was more pronounced,
+simultaneously generate point predictions of RUL, along with both               resulting in significantly higher aleatoric uncertainty compared to epis-
+epistemic and aleatoric uncertainties. This holistic output is fundamen-        temic uncertainty. This behavior reflects a rational skepticism inherent
+tal to trustworthy prognostics, as it provides not just a value, but a          in a trustworthy model, which acknowledges that initial degradation
+transparent measure of confidence. More importantly, the model in-              signs correlate weakly with final failure, thus rightfully withholding
+herently supports explainability from two complementary perspectives.           high confidence. As cycling progresses and the model accumulates
+                                                                                more degradation information, the prediction confidence improves ac-
+                                                                                cordingly, leading to a clear downward trend in both uncertainties.
+                                                                                This observed behavior aligns well with theoretical expectations, thus
+                                                                                validating the reasonableness of the UQ results. This alignment with the
+                                                                                physical reality of battery aging confirms that the model's confidence
+                                                                                is logically grounded rather than arbitrarily generated.
+
+                                                                                    Fig. 13 demonstrates the relationship between the two types of
+                                                                                uncertainty and the predicted RUL, which further corroborates this
+                                                                                risk-aware behavior. Uncertainties increase with longer predicted RULs,
+
+                                                                            11
+Z. Zhao et al.                                                                                                  Journal of Energy Storage 167 (2026) 122408
+
+Fig. 12. Aleatoric and epistemic uncertainties in RUL prediction. The red dashed line represents the ground-truth RUL, the blue solid line denotes the predicted
+RUL, and the light-blue shaded area indicates the prediction interval. Subfigure (a) corresponds to epistemic uncertainty, while subfigure (b) corresponds to
+aleatoric uncertainty. (For interpretation of the references to color in this figure legend, the reader is referred to the web version of this article.)
+
+                              Fig. 13. Relationship Between Epistemic/Aleatoric Uncertainty and Predicted RUL.
+
+Table 6                                                                       Table 7
+Comparative results of prediction accuracy across the three methods.          Comparative results of inference speed across the three methods.
+
+Cell            MC dropout    Ensemble method  Evidence regression            Cell  MC dropout                  Ensemble     Evidence
+                                                                                                                             regression
+#1              14.48 ± 0.63  11.23 ± 0.11     8.45 ± 1.76                                                      method
+
+#2              19.63 ± 0.78  14.51 ± 0.14     13.33 ± 1.98                   #1    1.36 ± 0.75                 1.21 ± 0.03  0.04 ± 0.01
+
+#3              20.83 ± 0.93  14.36 ± 0.18     23.43 ± 5.57                   #2    1.21 ± 0.11                 1.26 ± 0.03  0.04 ± 0.01
+
+#4              23.00 ± 0.99  18.31 ± 0.17     19.90 ± 3.34                   #3    1.31 ± 0.15                 1.34 ± 0.05  0.05 ± 0.01
+
+#5              19.67 ± 1.01  23.02 ± 0.21     22.14 ± 3.14                   #4    1.17 ± 0.06                 1.24 ± 0.03  0.04 ± 0.01
+
+#6              22.05 ± 1.16  20.76 ± 0.22     11.68 ± 3.11                   #5    1.20 ± 0.06                 1.30 ± 0.07  0.05 ± 0.01
+
+Average         19.94 ± 2.73  17.03 ± 4.05     16.49 ± 5.62                   #6    1.06 ± 0.05                 1.14 ± 0.04  0.04 ± 0.01
+
+reflecting the difficulty of long-term forecasting. which provides fur-       smallest standard deviation in RMSE, this advantage came at the cost
+ther support for the aforementioned perspective: predictions involving        of training 30 sub-models.
+longer remaining lifespans inherently entail more complex and long-
+term nonlinear degradation processes, and are more significantly af-              True trustworthiness in RUL prediction implies not just accuracy,
+fected by early-stage data noise, consequently leading to higher overall      but availability and responsiveness. As demonstrated in Table 7, the
+uncertainty. By explicitly quantifying this difficulty, the model alerts      deep evidential regression method exhibits a substantial advantage in
+the BMS to potential margins of error in long-term planning, thereby          terms of inference speed, outperforming both MC Dropout and model
+enabling safer, more conservative decision-making.                            ensemble by one to two orders of magnitude while maintaining an
+                                                                              exceptionally low standard deviation. This efficiency is attributed to
+4.5. Benchmark evaluation of uncertainty quantification                       its single-pass forward propagation design, which eliminates the need
+                                                                              for multiple sampling rounds as in MC Dropout or the substantial com-
+    While UQ provides the bounds of trust, high prediction accuracy           putational overhead of multi-model ensembles. These characteristics
+serves as its foundation. The comparative results of prediction accuracy      render it particularly well-suited for real-time prediction within RUL
+across the three methods were presented in Table 6. With regard to            prediction.
+prediction accuracy, the proposed method demonstrated the lowest
+RMSE in most test cells, including cells #1, #2, and #6, thus indicating      4.6. Verification of model's calibration
+its competitive point prediction capability. Despite the fact that the
+model ensemble approach demonstrated the highest stability, with the              With regard to uncertainty quality, the proposed method demon-
+                                                                              strates a clear advantage. Spearman correlation measures the mono-
+                                                                              tonic relationship between the predicted uncertainty and the actual
+
+                                                                          12
+Z. Zhao et al.                                                                                                                              Journal of Energy Storage 167 (2026) 122408
+
+Table 8                                                                          corresponding samples was then calculated. For instance, a confidence
+Comparative results of uncertainty quality across the three methods.             threshold of 0.05 corresponds to calculating the RMSE for the top 5%
+                                                                                 of samples with the lowest uncertainty.
+Cell  MC dropout        Ensemble method   Evidence regression
+                                                                                     In principle, if the uncertainty estimation of a method is accurate
+#1    0.1989 ± 0.0240   -0.2204 ± 0.1515  0.3176 ± 0.2146                        and well-calibrated, the RMSE should demonstrate a monotonically
+                                                                                 increasing trend as the confidence threshold expands from 0.05 to 0.95,
+#2    -0.1375 ± 0.1041  0.3492 ± 0.1291   0.5652 ± 0.1877                        gradually including more low-confidence samples. This is due to the
+                                                                                 fact that samples with lower prediction confidence, which corresponds
+#3    -0.4440 ± 0.0631  0.3412 ± 0.2059   0.4933 ± 0.1672                        to higher uncertainty, are generally more challenging for the model
+                                                                                 to predict accurately, thus resulting in larger prediction errors. As
+#4    -0.4412 ± 0.0521  0.2252 ± 0.1401   0.6913 ± 0.0885                        demonstrated in Fig. 15, the variation in average RMSE across different
+                                                                                 confidence quantiles for the six test cells is illustrated under the three
+#5    -0.2200 ± 0.0515  0.3622 ± 0.1299   0.6670 ± 0.1345                        methods.
+
+#6    -0.3030 ± 0.0526  -0.1838 ± 0.1026  0.2195 ± 0.1782                            The experimental results demonstrated that the deep evidential
+                                                                                 regression method exhibited a stable and significant increasing RMSE
+  Fig. 14. Relationship between epistemic uncertainty and prediction error.      trend across all test cells, thus confirming its superior calibration
+                                                                                 characteristics in uncertainty estimation. Conversely, the MC Dropout
+prediction error. Therefore, a higher positive Spearman correlation in-          method demonstrated anomalous behavior in specific cells (e.g., #3 and
+dicates better uncertainty calibration, meaning that samples with larger         #4), where the RMSE in high-confidence intervals was unexpectedly
+prediction errors are assigned higher uncertainty values. As shown in            higher than in low-confidence intervals. This finding suggests the pres-
+Table 8, deep evidential regression is the only method that achieves             ence of systematic bias in the estimation of uncertainty, which in turn
+positive correlations across all six cells, with an average Spearman             indicates that the method may, on occasion, result in an overestimation
+correlation of 0.4923, which is substantially higher than that of the            of prediction confidence. This, in turn, gives rise to predictions that
+ensemble method (0.1456) and MC Dropout (-0.2245). This result                   appear to be confident but which, in reality, contain a significant
+indicates that the proposed method provides a more reliable ranking              degree of error. Whilst the model ensemble method generally displayed
+of prediction confidence over a wide range of samples.                           an increasing RMSE trend in most cases, the magnitude of change
+                                                                                 remained limited, reflecting its restricted discriminative capability in
+    More importantly, the superiority of the proposed method is con-             uncertainty estimation and its difficulty in effectively distinguishing
+sistent across different cells rather than being driven by only a few            error differences between high and low-confidence samples.
+favorable cases. In particular, Cells #4 and #5 exhibit strong positive
+correlations of 0.6913 and 0.6670, respectively, suggesting that the pre-            Further analysis indicates that deep evidential regression performs
+dicted uncertainty is highly aligned with the actual error distribution in       remarkably well in identifying high-quality predictions. In high confi-
+these cases. Even in the most challenging case, Cell #6, the proposed            dence intervals (e.g., the top 5% and 25%), this method maintained the
+method still maintains a positive correlation (0.2195), whereas both             lowest RMSE values, thereby demonstrating its capacity to accurately
+baseline methods show negative values. This observation suggests that            identify the most trustworthy prediction results. This characteristic
+evidential regression has better robustness under cell-to-cell variability.      is of particular value in practical applications: well-calibrated uncer-
+In contrast, the ensemble method shows mixed behavior: although it               tainty estimates can provide battery management systems with a clear
+achieves moderate positive correlations in Cells #2­#5, it fails in Cells        decision-making basis. High-confidence predictions can be directly used
+#1 and #6, indicating limited stability across different data conditions.        for maintenance planning, while high-uncertainty predictions should
+MC Dropout performs worst overall, producing negative correlations in            trigger further verification or conservative strategies.
+five out of six cells, which implies that its uncertainty estimates are
+frequently misaligned with the true prediction errors. From a practical              In summary, the superior calibration of the proposed method trans-
+perspective, this improved uncertainty quality is important because it           forms RUL prediction from a mere numerical output into a trustworthy
+allows unreliable predictions to be more effectively identified, filtered,       decision-support tool, enabling it to more reliably identify samples with
+or prioritized for further inspection. This tendency is also visually            larger prediction errors and thereby providing trustworthy support for
+supported by Fig. 14, where the proposed method shows a clearer                  predictive confidence assessment in RUL prediction tasks.
+positive association between uncertainty and prediction error than the
+other two methods.                                                               5. Conclusions
+
+    The hallmark of a truly trustworthy predictor is calibration, which              Accurate prediction combined with rigorous UQ creates the cor-
+is the alignment between the model's predicted confidence and its                nerstone of trustworthy battery management in the energy storage
+actual accuracy. In order to validate the calibration of uncertainty esti-       industry. This paper proposes an SMoE-LSTM model, which advances
+mates, a further analysis was conducted to ascertain whether samples             both sequential pattern learning and UQ. The architecture employs
+with high confidence, characterized by low uncertainty, indeed exhibit           a sparse gating mechanism within the collaborative fusion model of
+lower prediction errors. Specifically, the battery samples in the test set       SMoE and LSTM to effectively capture temporal dynamics and complex
+were initially sorted in ascending order based on the epistemic uncer-           degradation patterns from heterogeneous battery data. Importantly,
+tainty output by the model, where lower uncertainty indicates higher             this sparse gating mechanism provides structural explainability by
+confidence. In a trustworthy system, selecting samples with higher               enabling explicit tracing of expert activation patterns across different
+confidence should strictly guarantee higher accuracy. Subsequently,              degradation stages, revealing how the model adaptively focuses its
+a range of confidence thresholds were selected, representing the top             computational resources. Crucially, the integration of Deep Evidential
+x% of samples with the highest confidence. The average RMSE of the               Regression fundamentally enhances the model's trustworthiness by
+                                                                                 enabling the simultaneous output of point predictions and decoupled
+                                                                                 uncertainty estimates. Experimental results on the MIT-Stanford dataset
+                                                                                 demonstrate the model's effectiveness in achieving trustworthy accu-
+                                                                                 racy. Our model achieves an average RMSE of 16.11 and an R2 of
+                                                                                 0.9821 across six test cells, while providing well-calibrated uncertainty
+                                                                                 estimates with an average Spearman correlation of 0.49. The single-
+                                                                                 pass evidential inference further reduces prediction time to 0.04 s per
+
+                                                                             13
+Z. Zhao et al.                                                               Journal of Energy Storage 167 (2026) 122408
+
+Fig. 15. Comparison of RMSE across different confidence intervals. Curves in different colors represent different methods, with the shaded areas indicating their
+respective error ranges.
+
+sample, offering a practical and trustworthy solution for real-time BMS      References
+applications. By decoupling epistemic and aleatoric uncertainties in
+a single forward pass, it achieves superior inference efficiency and           [1] R. Soni, A. Dvivedi, P. Kumar, Carbon neutrality in transportation: in the context
+reliability compared to alternative approaches. This combination of                   of renewable sources, J. Sustain. Transp. 19 (2025) 1­15.
+real-time responsiveness and risk awareness offers a practical solu-
+tion for safety-critical energy storage applications. Future work will         [2] M. Khaleel, Z. Yusupov, H. Kilic, et al., Battery technologies in electrical power
+focus on three aspects: implementation of the SMoE-LSTM model in                      systems: pioneering secure energy transitions, J. Power Sources 653 (2025)
+battery management system hardware prototypes, validation under                       237709.
+more diverse operating conditions and battery chemistries, and inte-
+gration of electrochemical knowledge to improve early-stage prediction         [3] R. Schmuch, R. Wagner, G. Hörpel, T. Placke, M. Winter, Performance and cost
+performance.                                                                          of materials for lithium-based rechargeable automotive batteries, Nat. Energy 3
+                                                                                      (4) (2018) 267­278.
+CRediT authorship contribution statement
+                                                                               [4] M. Wei, et al., Integrating mechanism and machine learning based capacity
+    Zhibin Zhao: Writing ­ review & editing, Writing ­ original                       estimation for LiFePO4 batteries under slight overcharge cycling, Energy 296
+draft, Resources, Methodology, Funding acquisition, Conceptual-                       (2024) 131208.
+ization. Mingqi Feng: Writing ­ review & editing, Writing ­
+original draft, Visualization, Validation, Supervision, Methodology,           [5] S. Sakib, M.B. Hossain, M.A. Zamee, M.J. Hossain, M.A. Habib, Role of battery
+Conceptualization. Qiuyu Yu: Resources, Project administration,                       energy storage systems: a comprehensive review on renewable energy zones
+Methodology, Investigation, Formal analysis. Hongming Yuan:                           integration in weak transmission networks, J. Energy Storage 128 (2025)
+Writing ­ review & editing, Validation, Supervision, Methodology.                     117223.
+Fujin Wang: Validation, Software, Resources, Formal analysis, Data
+curation, Conceptualization. Zhi Zhai: Validation, Supervision, Re-            [6] M. Wei, et al., Physics-informed attention networks for state-of-charge estimation
+sources, Project administration, Methodology, Investigation, Funding                  in electric heavy-duty vehicles on steep slopes, J. Power Sources 656 (2025)
+acquisition, Formal analysis.                                                         238114.
+
+Declaration of competing interest                                              [7] A. Ayyaswamy, B.S. Vishnugopi, P.P. Mukherjee, Revealing hidden predicaments
+                                                                                      to lithium-ion battery dynamics for electric vertical take-off and landing aircraft,
+    The authors declare that they have no known competing financial                   Joule 7 (9) (2023) 2016­2034.
+interests or personal relationships that could have appeared to
+influence the work reported in this paper.                                     [8] F. Wang, Z. Zhai, Y. Di, Z. Zhao, X. Chen, Physics-informed neural network for
+                                                                                      satellite battery degradation estimation based on an extreme segment data within
+Acknowledgments                                                                       2 min, IEEE Trans. Ind. Electron. 72 (9) (2025) 9748­9757.
+
+    This work was supported by the National Natural Science                    [9] V. Vega-Garita, M. Heydarzadeh, A.H. Dadash, E. Immonen, The need for aging-
+Foundation of China under Grant 52475128. Special thanks are                          aware control methods in lithium-ion batteries: a review, J. Energy Storage 132
+also extended to the anonymous reviewers for their constructive                       (2025) 117653.
+suggestions, which greatly improved the manuscript.
+                                                                             [10] J. Leijon, Charging strategies and battery ageing for electric vehicles: a review,
+Data availability                                                                     Energy Strategy Rev. 57 (2025) 101641.
+
+    Data will be made available on request.                                  [11] S.L.I. Vairavasundaram, B. Ashok, Navigating the spectrum of battery health
+                                                                                      management in electric vehicles: a comprehensive review, Results Eng. 27 (2025)
+                                                                                      106038.
+
+                                                                             [12] Y. Li, et al., A comprehensive review of remaining useful life prediction methods
+                                                                                      for lithium-ion batteries: models, trends, and engineering applications, J. Energy
+                                                                                      Chem. 112 (2026) 384­414.
+
+                                                                             [13] M.H.H. Khine, C.G. Kim, N. Aunsri, A review of Bayesian-filtering-based tech-
+                                                                                      niques in RUL prediction for lithium-ion batteries, J. Energy Storage 111 (2025)
+                                                                                      115371.
+
+                                                                             [14] H.-K. Wang, M. Gao, X. Zhang, et al., An empirical wavelet decomposition and
+                                                                                      inverted token transformer based remaining useful life prediction method of
+                                                                                      lithium batteries, J. Energy Storage 134 (2025) 117930.
+
+                                                                             [15] W. He, N. Williard, M. Osterman, M. Pecht, Prognostics of lithium-ion batteries
+                                                                                      based on Dempster­Shafer theory and the Bayesian Monte Carlo method, J.
+                                                                                      Power Sources 196 (23) (2011) 10314­10321.
+
+                                                                             [16] Y. Xing, E.W. Ma, K.-L. Tsui, M. Pecht, An ensemble model for predicting the
+                                                                                      remaining useful performance of lithium-ion batteries, Microelectron. Reliab. 53
+                                                                                      (6) (2013) 811­820.
+
+                                                                             [17] K. Kim, G. Lee, H. Chun, et al., Electrochemical­mechanical coupled model for
+                                                                                      computationally efficient prediction of long-term capacity fade of lithium-ion
+                                                                                      batteries, J. Energy Storage 86 (2024) 111224.
+
+                                                                             [18] A. Lamorgese, R. Mauri, B. Tellini, Electrochemical-thermal P2D aging model of
+                                                                                      a LiCoO2/graphite cell: capacity fade simulations, J. Energy Storage 20 (2018)
+                                                                                      289­297.
+
+                                                                             [19] F. Wang, W. Liu, M. Sun, Z. Zhai, Z. Zhao, X. Chen, Merging physics and neural
+                                                                                      network: A promising tool for prognostics and health management, Eng. Appl.
+                                                                                      Artif. Intell. 165 (2026) 113385.
+
+                                                                         14
+Z. Zhao et al.                                                                                                                                              Journal of Energy Storage 167 (2026) 122408
+
+[20] Q. Yu, F. Wang, Z. Zhai, et al., Multi-time scale feature extraction for early              [41] J. Hu, L. Wu, Early uncertainty quantification prediction of lithium-ion battery
+         prediction of battery RUL and knee point using a hybrid deep learning approach,                 remaining useful life with transformer ensemble model, IEEE Trans. Transp.
+         J. Energy Storage 117 (2025) 116024.                                                            Electrif. 10 (2024) 8618­8629.
+
+[21] X. Hu, L. Tan, T. Tao, M2BIST-SPNet: RUL prediction for railway signaling                   [42] I.D. Mienye, Y.X. Sun, A survey of ensemble learning: concepts, algorithms,
+         electromechanical devices, J. Supercomput. 80 (12) (2024) 16744­16774.                          applications, and prospects, IEEE Access 10 (2022) 1.
+
+[22] F. Wang, Z. Zhao, J. Ren, Z. Zhai, S. Wang, X. Chen, A transferable lithium-                [43] M.A. Ganaie, M. Hu, A.K. Malik, et al., Ensemble deep learning: a review, Eng.
+         ion battery remaining useful life prediction method from cycle-consistency of                   Appl. Artif. Intell. 115 (2022) 105151.
+         degradation trend, J. Power Sources 521 (2022) 230975.
+                                                                                                 [44] K. Liu, et al., A data-driven approach with uncertainty quantification for
+[23] K. Park, H.S. Kim, Deep learning based remaining useful life prediction of                          predicting future capacities and remaining useful life of lithium-ion battery, IEEE
+         lithium-ion batteries using early cycle degradation features, in: Annu. Conf. PHM               Trans. Ind. Electron. 68 (2021) 3170­3180.
+         Soc., Vol. 17, 2025.
+                                                                                                 [45] A. Thelen, et al., Probabilistic machine learning for battery health diagnostics
+[24] D. Chen, W. Zhang, C. Zhang, et al., A novel deep learning-based life prediction                    and prognostics--review and perspectives, npj Mater. Sustain. 2 (2024) 14.
+         method for lithium-ion batteries with strong generalization capability under
+         multiple cycle profiles, Appl. Energy 327 (2022) 120114.                                [46] C. Lin, et al., Multi-model ensemble learning for battery state-of-health es-
+                                                                                                         timation: Recent advances and perspectives, J. Energy Chem. 100 (2025)
+[25] Z. Wang, et al., Adaptive self-attention LSTM for RUL prediction of lithium-ion                     739­759.
+         batteries, Inf. Sci. 635 (2023) 398­413.
+                                                                                                 [47] M. Chen, J. Gao, C. Xu, R-EDL: Relaxing nonessential settings of evidential deep
+[26] G. Lyu, H. Zhang, Q. Miao, Parallel state fusion LSTM-based early-cycle stage                       learning, in: International Conference on Learning Representations, ICLR, 2024.
+         lithium-ion battery RUL prediction under lebesgue sampling framework, Reliab.
+         Eng. Syst. Saf. 236 (2023) 109315.                                                      [48] M. Sensoy, L. Kaplan, M. Kandemir, Evidential deep learning to quantify
+                                                                                                         classification uncertainty, in: Advances in Neural Information Processing Systems,
+[27] Z. Jin, et al., A data-driven framework for lithium-ion battery RUL using LSTM                      NeurIPS, 2018.
+         and XGBoost with feature selection via Binary Firefly Algorithm, Energy 314
+         (2025) 134229.                                                                          [49] L.H. Rieger, E. Flores, K.F. Nielsen, et al., Uncertainty-aware and explainable
+                                                                                                         machine learning for early prediction of battery degradation trajectory, Digit.
+[28] B. Zraibi, M. Mansouri, S.E. Loukili, Comparing deep learning methods to predict                    Discov. 2 (2023) 112­122.
+         the remaining useful life of lithium-ion batteries, Mater. Today: Proc. 62 (2022)
+         6298­6304.                                                                              [50] T. Pang, G. Fan, B. Zhou, et al., Robust capacity estimation with uncertainty
+                                                                                                         quantification for li-ion batteries under temporal data masking challenges: A
+[29] C. Riquelme, J. Puigcerver, B. Mustafa, et al., Scaling vision with sparse mixture                  progressive learning approach, Appl. Energy 401 (2025) 126648.
+         of experts, in: Annual Conference of the PHM Society, Vol. 17, 2021, pp.
+         8583­8595, 34.                                                                          [51] S. Hochreiter, J. Schmidhuber, Long short-term memory, Neural Comput. 9 (8)
+                                                                                                         (1997) 1735­1780.
+[30] S. Masoudnia, R. Ebrahimpour, Mixture of experts: a literature survey, Artif.
+         Intell. Rev. 42 (2014) 275­293.                                                         [52] A. Amini, W. Schwarting, A. Soleimany, et al., Deep evidential regression, 2020,
+                                                                                                         arXiv:1910.02600.
+[31] Damai Dai, Li Dong, Shuming Ma, Bo Zheng, Zhifang Sui, Baobao Chang, Furu
+         Wei, StableMoE: Stable routing strategy for mixture of experts, in: Proceedings         [53] J. Gao, M. Chen, L. Xiang, et al., A comprehensive survey on evidential deep
+         of the 60th Annual Meeting of the Association for Computational Linguistics                     learning and its applications, 2024, arXiv:2409.04720.
+         (Volume 1: Long Papers), 2022, pp. 7085­7095.
+                                                                                                 [54] G. Seo, J. Ha, M. Kim, et al., Rapid determination of lithium-ion battery
+[32] D. Chen, X. Zhou, AttMoE: Attention with Mixture of Experts for remaining useful                    degradation: High C-rate LAM and calculated limiting LLI, J. Energy Chem. 67
+         life prediction of lithium-ion batteries, J. Energy Storage 84 (2024) 110780.                   (2022) 663­671.
+
+[33] X. Dong, M. Yao, S. Xiang, A load-balanced deformable expert network for                    [55] D. Anseán, V.M. García, M. González, et al., Lithium-Ion battery degradation
+         lithium-ion battery remaining useful life prediction, J. Energy Storage 141 (2026)              indicators via incremental capacity analysis, IEEE Trans. Ind. Appl. 55 (3) (2019)
+         119587.                                                                                         2992­3002.
+
+[34] K. Liu, Y. Shang, Q. Ouyang, et al., A data-driven approach with uncertainty                [56] R.A. Jacobs, M.I. Jordan, S.J. Nowlan, et al., Adaptive mixtures of local experts,
+         quantification for predicting future capacities and remaining useful life of                    Neural Comput. 3 (1) (1991) 79­87.
+         lithium-ion battery, IEEE Trans. Ind. Electron. 68 (4) (2021) 3170­3180.
+                                                                                                 [57] N. Shazeer, et al., Outrageously large neural networks: the sparsely-gated
+[35] V. Nemani, et al., Uncertainty quantification in machine learning for engineering                   mixture-of-experts layer, 2017, arXiv:1701.06538.
+         design and health prognostics: a tutorial, Mech. Syst. Signal Process. 205 (2023)
+         110796.                                                                                 [58] K.A. Severson, et al., Data-driven prediction of battery cycle life before capacity
+                                                                                                         degradation, Nat. Energy 4 (5) (2019) 383­391.
+[36] W. He, Z. Jiang, T. Xiao, et al., A survey on uncertainty quantification methods
+         for deep learning, 2025, arXiv:2302.13425.                                              [59] F. Wang, Z. Zhai, Z. Zhao, et al., Physics-informed neural network for lithium-
+                                                                                                         ion battery degradation stable modeling and prognosis, Nat. Commun. 15 (2024)
+[37] Y. Ni, X. Li, H. Zhang, et al., Online identification of knee point in conventional                 4332.
+         and accelerated aging lithium-ion batteries using linear regression and Bayesian
+         inference methods, Appl. Energy 388 (2025) 125646.                                      [60] N. Khan, F.U.M. Ullah, A. Ullah, et al., Batteries state of health estimation via
+                                                                                                         efficient neural networks with multiple channel charging profiles, IEEE Access 9
+[38] Y. Gal, Z. Ghahramani, Dropout as a Bayesian approximation: representing model                      (2020) 7797­7813.
+         uncertainty in deep learning, 2016, arXiv:1506.02142.
+                                                                                                 [61] Y. Toughzaoui, S.B. Toosi, H. Chaoui, et al., State of health estimation and
+[39] S. Zhang, Z. Liu, H. Su, A Bayesian mixture neural network for remaining useful                     remaining useful life assessment of lithium-ion batteries: A comparative study,
+         life prediction of lithium-ion batteries, IEEE Trans. Transp. Electrif. 8 (2022)                J. Energy Storage 51 (2022) 104520.
+         4708­4721.
+                                                                                                 [62] C.-W. Hsu, et al., Deep neural network battery life and voltage prediction by
+[40] Y. Ke, R. Zhou, R. Zhu, W. Peng, State of health estimation of lithium ion battery                  using data of one cycle only, Appl. Energy 306 (2022) 118134.
+         with uncertainty quantification based on Bayesian deep learning, in: 2021 3rd
+         International Conference on System Reliability and Safety Engineering, SRSE,            [63] J. Huang, L. Liu, H. Zhao, et al., RUL-Mamba: Mamba-based remaining useful
+         2021, pp. 12­18.                                                                                life prediction for lithium-ion batteries, J. Energy Storage 120 (2025) 116376.
+
+                                                                                             15
+

@@ -1,0 +1,16 @@
+# Large raw data — download from the original sources instead
+data/
+checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Rendered paper pages (archived, regenerable)
+archive/*.png
+
+# Misc
+.idea/
+.vscode/
+*.log
