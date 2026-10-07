@@ -148,10 +148,11 @@ class SparseMoE(nn.Module):
     def forward(self, x: torch.Tensor,
                 gate_input: torch.Tensor = None,
                 return_gates: bool = False):
-        """Route input through sparse experts (vectorized per expert).
+        """Route input through sparse experts (fully vectorised).
 
-        Groups samples by assigned expert and processes each expert's
-        batch in a single forward pass. Avoids per-sample .item() calls.
+        All expert weights are stacked into 3-D tensors so every expert
+        runs as one batched matmul — no per-expert Python loop. The
+        per-expert parameter layout is unchanged (checkpoint compatible).
 
         Args:
             x:            shape (B, input_dim) — expert input
@@ -168,25 +169,25 @@ class SparseMoE(nn.Module):
             gate_input = x
         gates, indices = self.gate(gate_input)                 # (B, E), (B, K)
         B, D = x.shape
-        output = torch.zeros(B, D, device=x.device, dtype=x.dtype)
 
-        # For each expert, collect all samples routed to it
-        for expert_idx in range(self.num_experts):
-            # Find which (sample, k) pairs use this expert
-            expert_mask = (indices == expert_idx)  # (B, K)
-            if not expert_mask.any():
-                continue
+        # Stack all expert weights (cheap view-concatenation) — expert i is
+        # Linear(D->H) -> ReLU -> Dropout -> Linear(H->D) inside experts[i].
+        W1 = torch.stack([ex.net[0].weight for ex in self.experts], dim=0)  # (E,H,D)
+        b1 = torch.stack([ex.net[0].bias for ex in self.experts], dim=0)    # (E,H)
+        W2 = torch.stack([ex.net[3].weight for ex in self.experts], dim=0)  # (E,D,H)
+        b2 = torch.stack([ex.net[3].bias for ex in self.experts], dim=0)    # (E,D)
 
-            # Get sample indices and corresponding gate weights
-            sample_idx, k_idx = expert_mask.nonzero(as_tuple=True)  # (N,), (N,)
-            weights = gates[sample_idx, expert_idx]                  # (N,)
+        # One batched forward through all E experts
+        h = torch.einsum('bd,ehd->beh', x, W1) + b1                       # (B,E,H)
+        h = F.relu(h)
+        h = F.dropout(h, p=self.experts[0].net[2].p, training=self.training)
+        out = torch.einsum('beh,edh->bed', h, W2) + b2                    # (B,E,D)
 
-            # Batch forward through the expert
-            expert_input = x[sample_idx]                             # (N, D)
-            expert_out = self.experts[expert_idx](expert_input)      # (N, D)
-
-            # Accumulate weighted outputs
-            output.index_add_(0, sample_idx, weights.unsqueeze(-1) * expert_out)
+        # Weighted combination of the top-k routed experts
+        sel_w = gates.gather(1, indices).unsqueeze(-1)                    # (B,K,1)
+        sel_out = torch.gather(out, 1,
+                               indices.unsqueeze(-1).expand(-1, -1, D))   # (B,K,D)
+        output = (sel_out * sel_w).sum(dim=1)                             # (B,D)
 
         if return_gates:
             return output, (gates, indices)
