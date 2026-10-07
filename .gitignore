@@ -14,3 +14,10 @@ archive/*.png
 .idea/
 .vscode/
 *.log
+
+# Copyrighted paper PDF (not redistributed)
+1-s2.0-S2352152X26020724-main.pdf
+paper_text.txt
+
+# Local Claude settings
+.claude/
