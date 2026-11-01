@@ -22,3 +22,6 @@ paper_text.txt
 # Local Claude settings
 .claude/
 page7_500.png
+
+# Local reference materials (papers, cloned baselines)
+对比库/
