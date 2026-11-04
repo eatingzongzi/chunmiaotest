@@ -283,9 +283,12 @@ class SMoELSTM(nn.Module):
                  num_experts: int = 10, top_k: int = 4,
                  lstm_layers: int = 2, dropout: float = 0.1,
                  evidence_hidden: int = 64, gate_hidden: int = 0,
-                 bidirectional: bool = False):
+                 bidirectional: bool = False, use_attention: bool = False,
+                 multitask: bool = False):
         super().__init__()
         self.bidirectional = bidirectional
+        self.use_attention = use_attention
+        self.multitask = multitask
 
         # ── LSTM encoder ──────────────────────────────────────────
         self.lstm = nn.LSTM(
@@ -302,6 +305,15 @@ class SMoELSTM(nn.Module):
             self.lstm_proj = nn.Linear(2 * hidden_dim, hidden_dim)
         else:
             self.lstm_proj = nn.Identity()
+
+        # Attention pooling over the LSTM time axis (optional)
+        if use_attention:
+            attn_in = 2 * hidden_dim if bidirectional else hidden_dim
+            self.attn = nn.Linear(attn_in, 1)
+
+        # Multi-task auxiliary head: predicts future capacity (SOH), optional
+        if multitask:
+            self.aux_head = nn.Linear(hidden_dim, 1)
 
         # ── Rough RUL head: gives the gate an explicit degradation-stage
         #    signal (experts specialise by RUL stage, so routing benefits
@@ -335,13 +347,15 @@ class SMoELSTM(nn.Module):
                 nn.init.zeros_(p)
 
     def forward(self, x: torch.Tensor,
-                return_gates: bool = False) -> Tuple:
+                return_gates: bool = False,
+                return_aux: bool = False) -> Tuple:
         """Forward pass.
 
         Args:
             x:            battery feature sequence, shape (batch, seq_len, input_dim)
             return_gates: also return the MoE (gates, indices) pair for the
                           auxiliary load-balancing loss
+            return_aux:   also return the multi-task SOH prediction
 
         Returns:
             gamma:  predictive mean  (Eq. 19)
@@ -349,17 +363,26 @@ class SMoELSTM(nn.Module):
             alpha:  DoF parameter
             beta:   scale parameter
             plus (gates, indices) when return_gates is True
+            plus aux when return_aux is True
         """
         # ── LSTM encoding ─────────────────────────────────────────
         lstm_out, (h_n, _) = self.lstm(x)               # h_n: (L, B, H) or (2L, B, H)
 
-        # Use the last hidden state of the final LSTM layer
-        if self.bidirectional:
+        if self.use_attention:
+            # Learn a scalar importance score per time step, then pool
+            scores = torch.softmax(self.attn(lstm_out).squeeze(-1), dim=1)  # (B,L)
+            pooled = (lstm_out * scores.unsqueeze(-1)).sum(dim=1)          # (B,H or 2H)
+            features = self.lstm_proj(pooled) if self.bidirectional else pooled
+        elif self.bidirectional:
             # h_n order: [l0_fwd, l0_bwd, l1_fwd, l1_bwd, ...]
             fwd, bwd = h_n[-2], h_n[-1]
             features = self.lstm_proj(torch.cat([fwd, bwd], dim=-1))   # (B, H)
         else:
             features = h_n[-1]                           # (B, H)
+
+        aux = None
+        if self.multitask:
+            aux = self.aux_head(features).squeeze(-1)    # (B,) SOH-scale output
 
         # ── SMoE routing ──────────────────────────────────────────
         # Gate sees [features, rough RUL] so it can route by degradation
@@ -379,7 +402,10 @@ class SMoELSTM(nn.Module):
             # gate_info = (gates, indices); append pre-MoE features and the
             # rough RUL so the training loop can compute oracle targets and
             # supervise the router head.
-            return gamma, nu, alpha, beta, gate_info + (features, rough)
+            out = (gamma, nu, alpha, beta, gate_info + (features, rough))
+            return out + (aux,) if return_aux else out
+        if return_aux:
+            return gamma, nu, alpha, beta, aux
         return gamma, nu, alpha, beta
 
     @staticmethod
