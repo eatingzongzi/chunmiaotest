@@ -28,14 +28,19 @@
 # 数据：MIT-Stanford 数据集 2017-06-30 批次 .mat 放入 data/mit_stanford/
 
 # 复现论文协议（24-cell 训练，单 seed）
-python multi_seed.py
+python experiments/mit/multi_seed.py
 
 # 优化协议单模型（42-cell 训练 + 硬路由监督）
-python test_moredata.py
+python experiments/mit/test_moredata.py
+
+# 无泄漏固定划分评估
+python experiments/mit/mit_clean_eval.py
 
 # 20 模型集成评估（需先按 ensemble42_20.py 训练保存 checkpoints）
-python ensemble42_20.py
+python experiments/ensemble/ensemble42_20.py
 ```
+
+> 所有脚本请从项目根目录运行（数据路径相对根目录）。
 
 模型权重（20 个 42-cell 模型，共约 68MB）与原始数据未上传；可按脚本重新训练，或联系作者获取。
 
@@ -43,9 +48,14 @@ python ensemble42_20.py
 
 - `src/` — 模型（MoE/LSTM/证据层）、训练（硬路由监督）、评估、数据加载
 - `config.py` — 全部超参与优化开关（balance/route_sup/aug/bidirectional 等）
-- `ensemble42_20.py` — 最终 20 模型集成评估
-- `FINAL_REPORT.md` — 完整成果报告
-- `archive/` — 复现与优化过程中的历史实验/诊断脚本
+- `experiments/`
+  - `mit/` — MIT 数据集实验（复现、优化、无泄漏评估、物理混合模型）
+  - `evtol/` — CMU eVTOL 数据集管线（特征提取、RUL 训练、集成）
+  - `ensemble/` — 集成与知识蒸馏
+  - `comparison/` — 与 NASA 贝叶斯 PINN 的对比
+- `diagnostics/` — 诊断脚本（路由、不确定性、外推、物理律、MoE 速度）
+- `FINAL_REPORT.md` / `results_clean.md` — 成果报告与无泄漏结果汇总
+- `archive/` — 早期复现阶段的历史实验脚本
 
 ## 引用
 
