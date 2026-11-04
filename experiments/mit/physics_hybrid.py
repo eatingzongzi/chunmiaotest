@@ -14,7 +14,7 @@ Protocol: 24-cell fixed split (paper protocol), test [13,17,24,25,34,29].
 Baseline (clean): single 23.81, 5-model ensemble 22.75.
 """
 import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 import numpy as np
 import torch
 import torch.nn as nn
