@@ -33,6 +33,8 @@ device = get_device('cuda')
 L = 30
 EOL_CAP = 0.88
 N_CELLS, N_TEST, SEED_SPLIT = 30, 6, 42
+GATE_LAMBDA = 1.0
+GATE_TAU = 0.02
 
 
 # ── Cells ───────────────────────────────────────────────────────────
@@ -184,7 +186,7 @@ class PhysicsFusion(nn.Module):
         phys = p[:, 0] * p[:, 4]
         fused = w.squeeze(-1) * phys + (1 - w.squeeze(-1)) * g_norm
         gamma_f = fused.unsqueeze(-1)
-        return gamma_f, nu, alpha, beta, gi, w.squeeze(-1)
+        return gamma_f, nu, alpha, beta, gi, w.squeeze(-1), g_norm
 
 
 class DS(torch.utils.data.Dataset):
@@ -208,8 +210,18 @@ def train_pih(seed, use_physics=True):
             if not use_physics:
                 p = p.clone(); p[:, 4] = 0.0  # invalidate physics (ablation)
             opt.zero_grad()
-            g, nu, al, be, gi, w = model(X, p)
+            g, nu, al, be, gi, w, g_norm = model(X, p)
             loss = crit(y, g, nu, al, be)
+            # Oracle gate supervision: target weight says which predictor is
+            # better on this sample (physics vs NN), in normalised RUL units.
+            with torch.no_grad():
+                phys_norm = p[:, 0] * p[:, 4]
+                err_nn = (g_norm - y.squeeze(-1)).pow(2)
+                err_phys = (phys_norm - y.squeeze(-1)).pow(2)
+                target_w = torch.sigmoid((err_nn - err_phys) / GATE_TAU) * p[:, 4]
+            gate_loss = F.binary_cross_entropy(
+                w.clamp(1e-6, 1 - 1e-6), target_w.clamp(1e-6, 1 - 1e-6))
+            loss = loss + GATE_LAMBDA * gate_loss
             gates, indices, feats, rough = gi
             loss = loss + 0.05 * model.backbone.moe.balance_loss(gates, indices, 10)
             E = 10
@@ -228,26 +240,28 @@ def train_pih(seed, use_physics=True):
             loss.backward(); opt.step()
 
     model.eval()
-    per_cell, ws = [], []
+    per_cell, ws, cell_ws = [], [], {}
     with torch.no_grad():
         for c in test_ids:
             x = torch.tensor(test_pack[c]['X'], dtype=torch.float32).to(device)
             p = torch.tensor(test_pack[c]['p'], dtype=torch.float32).to(device)
-            g, nu, al, be, gi, w = model(x, p)
+            g, nu, al, be, gi, w, g_norm = model(x, p)
             pred = ls.inverse_transform(g.cpu().numpy().reshape(-1, 1)).ravel()
             per_cell.append(rmse(test_pack[c]['y'], pred))
             ws.append(float(w.mean()))
-    return np.mean(per_cell), per_cell, ws
+            cell_ws[c] = float(w.mean())
+    return np.mean(per_cell), per_cell, ws, cell_ws
 
 
 print("\n=== Physics-informed hybrid vs pure NN (fixed split, 3 seeds) ===")
 for use in [True]:
     all_r, all_w = [], []
     for s in range(3):
-        avg, per_cell, ws = train_pih(s, use_physics=use)
+        avg, per_cell, ws, cell_ws = train_pih(s, use_physics=use)
         all_r.append(avg); all_w.append(np.mean(ws))
         print(f"seed {s}: PIH avg={avg:.2f} per-cell="
-              f"{[f'{v:.1f}' for v in per_cell]} mean_gate_w={np.mean(ws):.2f}",
+              f"{[f'{v:.1f}' for v in per_cell]} mean_gate_w={np.mean(ws):.2f} "
+              f"cell_w={{{', '.join(f'{c}:{v:.2f}' for c, v in cell_ws.items())}}}",
               flush=True)
     print(f"\nPIH 3-seed: {np.mean(all_r):.2f}+/-{np.std(all_r):.2f} "
           f"(baseline clean single 23.81)")
