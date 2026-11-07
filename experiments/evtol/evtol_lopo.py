@@ -45,7 +45,7 @@ PROTOCOL = {
 
 
 def load_cells():
-    d = np.load('data/evtol_features_v2.npy', allow_pickle=True).item()
+    d = np.load('data/evtol_features_v3.npy', allow_pickle=True).item()
     cells = {}
     for cid, v in d.items():
         soh, cyc = v['soh'], v['cycle']
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--features', choices=['base', 'ir'], default='ir')
     args = ap.parse_args()
-    sl = slice(0, 28) if args.features == 'base' else slice(0, 39)
+    sl = slice(0, 28) if args.features == 'base' else slice(0, 40)
 
     cells = load_cells()
     ids = [c for c in sorted(cells) if c in PROTOCOL]
