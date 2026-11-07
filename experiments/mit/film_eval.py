@@ -81,8 +81,8 @@ print(f"train {len(train_ids)} / test {test_ids}")
 data = {c['cell_id']: build(c) for c in cells}
 Xtr = np.concatenate([data[c][0] for c in train_ids])
 ytr = np.concatenate([data[c][1] for c in train_ids])
-Str = np.stack([np.repeat(data[c][2][None, :], len(data[c][1]), 0)
-                for c in train_ids]).reshape(-1, 32)
+Str = np.concatenate([np.repeat(data[c][2][None, :], len(data[c][1]), 0)
+                      for c in train_ids], axis=0)
 
 N, Lw, D = Xtr.shape
 fs = MinMaxScaler().fit(Xtr.reshape(-1, D))
