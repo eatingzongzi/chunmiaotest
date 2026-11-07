@@ -27,7 +27,7 @@ SEED = 42
 
 
 def load_cells():
-    d = np.load('data/evtol_features_v3.npy', allow_pickle=True).item()
+    d = np.load('data/evtol_features_v4.npy', allow_pickle=True).item()
     cells = {}
     for cid, v in d.items():
         soh, cyc = v['soh'], v['cycle']
@@ -119,7 +119,8 @@ def train_eval(feat_slice, train_ids, test_ids, seed=SEED):
     return res
 
 
-for tag, sl in [('base28', slice(0, 28)), ('+IR40', slice(0, 40))]:
+for tag, sl in [('base28', slice(0, 28)), ('+IR40', slice(0, 40)),
+                ('+SOH/T46', slice(0, 46))]:
     print(f"\n=== {tag} ===")
     fold_means, per_cell = [], {}
     for k, test_ids in enumerate(folds):
