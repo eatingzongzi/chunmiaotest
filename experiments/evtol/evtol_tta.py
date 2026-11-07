@@ -136,6 +136,10 @@ def tta_adapt(model, fs, cell, prefix_frac=PREFIX_FRAC):
         p.requires_grad = False
     for p in m.lstm.parameters():
         p.requires_grad = True
+    # cuDNN RNN backward needs training mode; keep frozen modules in eval
+    m.train()
+    m.moe.eval()
+    m.evidence.eval()
     aux = nn.Linear(128, 1).to(device)
 
     soh_pre = cell['soh'][pre_idx]
