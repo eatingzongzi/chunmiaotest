@@ -49,7 +49,10 @@ PROTOCOL = {
 }
 
 
-def load_cells():
+TEMP_COLS = [5, 11, 17, 23, 27]   # charge/to/cruise/landing Tmax + T_start
+
+
+def load_cells(drop_temp=False):
     d = np.load('data/evtol_features_v4.npy', allow_pickle=True).item()
     cells = {}
     for cid, v in d.items():
@@ -67,6 +70,9 @@ def load_cells():
         rul = eol - c
         Xw = np.stack([X[j:j + L] for j in range(len(X) - L + 1)], 0)
         yw = np.array([rul[j + L - 1] for j in range(len(X) - L + 1)])
+        if drop_temp:
+            keep_cols = [j for j in range(Xw.shape[-1]) if j not in TEMP_COLS]
+            Xw = Xw[..., keep_cols]
         cells[cid] = {'X': Xw.astype(np.float32), 'y': yw.astype(np.float32)}
     return cells
 
@@ -173,8 +179,10 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--mode', choices=['cv', 'lopo'], default='cv')
     ap.add_argument('--experts', type=int, default=N_EXPERTS)
+    ap.add_argument('--drop-temp', action='store_true',
+                    help='drop absolute temperature features (keep T-normalised IR)')
     args = ap.parse_args()
-    cells = load_cells()
+    cells = load_cells(drop_temp=args.drop_temp)
     ids = [c for c in sorted(cells) if c in PROTOCOL]
     print(f"{len(ids)} cells, features {cells[ids[0]]['X'].shape[-1]}, "
           f"experts {args.experts}")
