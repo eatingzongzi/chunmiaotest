@@ -33,6 +33,7 @@ N_FOLDS = 5
 SEED = 42
 N_EXPERTS = 6
 TOP_K = 4
+BUCKETS = [(0, 100), (100, 200), (200, 400), (400, 10**9)]
 
 PROTOCOL = {
     'VAH01': 'baseline', 'VAH17': 'baseline', 'VAH27': 'baseline',
@@ -125,6 +126,7 @@ def train_eval(cells, train_ids, test_ids, seed=SEED, n_experts=N_EXPERTS):
 
     model.eval()
     res = {}
+    bucket_errs = {b: [] for b in BUCKETS}
     with torch.no_grad():
         for c in test_ids:
             X = cells[c]['X']
@@ -132,8 +134,15 @@ def train_eval(cells, train_ids, test_ids, seed=SEED, n_experts=N_EXPERTS):
                              dtype=torch.float32).to(device)
             g, *_ = model(x)
             p = ls.inverse_transform(g.cpu().numpy().reshape(-1, 1)).ravel()
-            res[c] = rmse(cells[c]['y'], p)
-    return res
+            y = cells[c]['y']
+            res[c] = rmse(y, p)
+            for i, yt in enumerate(y):
+                e = float((p[i] - yt) ** 2)
+                for lo, hi in BUCKETS:
+                    if lo <= yt < hi:
+                        bucket_errs[(lo, hi)].append(e)
+                        break
+    return res, bucket_errs
 
 
 def run_cv(cells, ids, n_experts=N_EXPERTS):
@@ -141,9 +150,12 @@ def run_cv(cells, ids, n_experts=N_EXPERTS):
     perm = rng.permutation(len(ids))
     folds = [[ids[i] for i in perm[k::N_FOLDS]] for k in range(N_FOLDS)]
     fold_means, per_cell = [], {}
+    all_bucket = {b: [] for b in BUCKETS}
     for k, test_ids in enumerate(folds):
         train_ids = [c for c in ids if c not in test_ids]
-        res = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
+        res, be = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
+        for b, v in be.items():
+            all_bucket[b].extend(v)
         fold_means.append(np.mean(list(res.values())))
         for c, v in res.items():
             per_cell.setdefault(c, []).append(v)
@@ -152,6 +164,12 @@ def run_cv(cells, ids, n_experts=N_EXPERTS):
     allv = [v for vs in per_cell.values() for v in vs]
     print(f"\nCLEAN model CV mean={np.mean(allv):.2f}  "
           f"fold-mean={np.mean(fold_means):.2f}+/-{np.std(fold_means):.2f}")
+    print("  RMSE by true-RUL bucket:")
+    for b, v in all_bucket.items():
+        if v:
+            hi = b[1] if b[1] < 10**8 else 'inf'
+            print(f"    RUL [{b[0]:>3},{hi:>4}): n={len(v):5d} "
+                  f"RMSE={np.sqrt(np.mean(v)):7.1f}")
     worst = sorted(per_cell.items(), key=lambda kv: -np.mean(kv[1]))[:5]
     print("hardest:", [(c, round(float(np.mean(v)), 1)) for c, v in worst])
 
@@ -162,7 +180,7 @@ def run_lopo(cells, ids, n_experts=N_EXPERTS):
     for fam in families:
         test_ids = [c for c in ids if PROTOCOL[c] == fam]
         train_ids = [c for c in ids if c not in test_ids]
-        res = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
+        res, _ = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
         fold_means.append(np.mean(list(res.values())))
         for c, v in res.items():
             per_cell[c] = v

@@ -352,7 +352,8 @@ class SMoELSTM(nn.Module):
     def forward(self, x: torch.Tensor,
                 return_gates: bool = False,
                 return_aux: bool = False,
-                film_stats: torch.Tensor = None) -> Tuple:
+                film_stats: torch.Tensor = None,
+                return_features: bool = False) -> Tuple:
         """Forward pass.
 
         Args:
@@ -408,6 +409,9 @@ class SMoELSTM(nn.Module):
         # ── Evidence layer ────────────────────────────────────────
         gamma, nu, alpha, beta = self.evidence(features)
 
+        if return_features:
+            # post-MoE representation, for test-time auxiliary adaptation
+            return gamma, nu, alpha, beta, features
         if return_gates:
             # gate_info = (gates, indices); append pre-MoE features and the
             # rough RUL so the training loop can compute oracle targets and
