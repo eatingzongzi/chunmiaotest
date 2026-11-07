@@ -121,8 +121,9 @@ def train_base(cells, train_ids, seed=SEED):
 def tta_adapt(model, fs, cell, prefix_frac=PREFIX_FRAC):
     """Fine-tune the LSTM on the cell's prefix with a SOH self-supervised head."""
     D = cell['X'].shape[-1]
-    X = torch.tensor(fs.transform(cell['X'].reshape(-1, D)),
-                     dtype=torch.float32).to(device)
+    Xn = fs.transform(cell['X'].reshape(-1, D)).reshape(
+        len(cell['X']), L, D)
+    X = torch.tensor(Xn, dtype=torch.float32).to(device)
     end_c = cell['end_cycle']
     prefix_end = prefix_frac * cell['eol']
     pre_idx = np.where(end_c <= prefix_end)[0]
@@ -156,8 +157,9 @@ def tta_adapt(model, fs, cell, prefix_frac=PREFIX_FRAC):
 
 def predict_rul(model, fs, ls, cell, idx):
     D = cell['X'].shape[-1]
-    x = torch.tensor(fs.transform(cell['X'][idx].reshape(-1, D)),
-                     dtype=torch.float32).to(device)
+    Xn = fs.transform(cell['X'][idx].reshape(-1, D)).reshape(
+        len(idx), L, D)
+    x = torch.tensor(Xn, dtype=torch.float32).to(device)
     with torch.no_grad():
         g, *_ = model(x)
     return ls.inverse_transform(g.cpu().numpy().reshape(-1, 1)).ravel()
