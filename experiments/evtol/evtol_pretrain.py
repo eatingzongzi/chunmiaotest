@@ -49,7 +49,13 @@ def load_nasa():
     for pack, v in d.items():
         if not np.isfinite(v['eol']):
             continue
-        X = np.delete(v['X'], NASA_DROP, axis=1)
+        X = np.delete(v['X'], NASA_DROP, axis=1).copy()
+        # impute missing charge stats (missions with no preceding charge)
+        for j in range(X.shape[1]):
+            col = X[:, j]
+            ok = np.isfinite(col)
+            if not ok.all():
+                col[~ok] = np.median(col[ok]) if ok.any() else 0.0
         rul = v['eol'] - v['cycle']
         keep = rul >= 0
         if keep.sum() < L + 5:
@@ -66,7 +72,13 @@ def load_cmu():
     d = np.load('data/evtol_cmu_generic.npy', allow_pickle=True).item()
     cells = {}
     for cid, v in d.items():
-        Xw, yw = windows_from_series(v['X'], v['rul'])
+        X = v['X'].copy()
+        for j in range(X.shape[1]):
+            col = X[:, j]
+            ok = np.isfinite(col)
+            if not ok.all():
+                col[~ok] = np.median(col[ok]) if ok.any() else 0.0
+        Xw, yw = windows_from_series(X, v['rul'])
         if Xw is None:
             continue
         cells[cid] = {'X': Xw, 'y': yw}
