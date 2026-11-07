@@ -107,11 +107,11 @@ class EVTOLV2(nn.Module):
         scale, shift = film.chunk(2, dim=-1)
         h = h * (1.0 + torch.tanh(scale)) + shift
         rough = self.router(h)
-        z, gi = self.moe(h, gate_input=torch.cat([h, rough], -1),
-                         return_gates=True)
+        z, (gates, indices) = self.moe(h, gate_input=torch.cat([h, rough], -1),
+                                       return_gates=True)
         gamma, nu, alpha, beta = self.evidence(z)
         aux = self.aux_head(h)
-        return gamma, nu, alpha, beta, gi, aux
+        return gamma, nu, alpha, beta, (gates, indices, h, rough), aux
 
 
 def train_eval(train_ids, test_ids, cells, seed=SEED):
