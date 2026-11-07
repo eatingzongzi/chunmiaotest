@@ -78,7 +78,7 @@ class DS(torch.utils.data.Dataset):
     def __getitem__(self, i): return self.X[i], self.y[i]
 
 
-def train_eval(cells, train_ids, test_ids, seed=SEED):
+def train_eval(cells, train_ids, test_ids, seed=SEED, n_experts=N_EXPERTS):
     Xtr = np.concatenate([cells[c]['X'] for c in train_ids])
     ytr = np.concatenate([cells[c]['y'] for c in train_ids])
     N, Lw, D = Xtr.shape
@@ -89,11 +89,11 @@ def train_eval(cells, train_ids, test_ids, seed=SEED):
 
     set_seed(seed)
     loader, _ = prepare_dataloaders(DS(Xtr_n, ytr_n), 64, 0.0, seed)
-    model = SMoELSTM(input_dim=D, hidden_dim=128, num_experts=N_EXPERTS,
+    model = SMoELSTM(input_dim=D, hidden_dim=128, num_experts=n_experts,
                      top_k=TOP_K, lstm_layers=2, evidence_hidden=64).to(device)
     crit = EvidentialRegressionLoss(coeff=2.0)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
-    E = N_EXPERTS
+    E = n_experts
     for epoch in range(100):
         model.train()
         for X, y in loader:
@@ -130,14 +130,14 @@ def train_eval(cells, train_ids, test_ids, seed=SEED):
     return res
 
 
-def run_cv(cells, ids):
+def run_cv(cells, ids, n_experts=N_EXPERTS):
     rng = np.random.RandomState(SEED)
     perm = rng.permutation(len(ids))
     folds = [[ids[i] for i in perm[k::N_FOLDS]] for k in range(N_FOLDS)]
     fold_means, per_cell = [], {}
     for k, test_ids in enumerate(folds):
         train_ids = [c for c in ids if c not in test_ids]
-        res = train_eval(cells, train_ids, test_ids)
+        res = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
         fold_means.append(np.mean(list(res.values())))
         for c, v in res.items():
             per_cell.setdefault(c, []).append(v)
@@ -150,13 +150,13 @@ def run_cv(cells, ids):
     print("hardest:", [(c, round(float(np.mean(v)), 1)) for c, v in worst])
 
 
-def run_lopo(cells, ids):
+def run_lopo(cells, ids, n_experts=N_EXPERTS):
     families = sorted(set(PROTOCOL[c] for c in ids))
     fold_means, per_cell = [], {}
     for fam in families:
         test_ids = [c for c in ids if PROTOCOL[c] == fam]
         train_ids = [c for c in ids if c not in test_ids]
-        res = train_eval(cells, train_ids, test_ids)
+        res = train_eval(cells, train_ids, test_ids, n_experts=n_experts)
         fold_means.append(np.mean(list(res.values())))
         for c, v in res.items():
             per_cell[c] = v
@@ -172,12 +172,13 @@ def run_lopo(cells, ids):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--mode', choices=['cv', 'lopo'], default='cv')
+    ap.add_argument('--experts', type=int, default=N_EXPERTS)
     args = ap.parse_args()
     cells = load_cells()
     ids = [c for c in sorted(cells) if c in PROTOCOL]
     print(f"{len(ids)} cells, features {cells[ids[0]]['X'].shape[-1]}, "
-          f"experts {N_EXPERTS}")
+          f"experts {args.experts}")
     if args.mode == 'cv':
-        run_cv(cells, ids)
+        run_cv(cells, ids, args.experts)
     else:
-        run_lopo(cells, ids)
+        run_lopo(cells, ids, args.experts)
