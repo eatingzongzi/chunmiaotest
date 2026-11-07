@@ -117,8 +117,8 @@ class EVTOLV2(nn.Module):
 def train_eval(train_ids, test_ids, cells, seed=SEED):
     Xtr = np.concatenate([cells[c]['X'] for c in train_ids])
     ytr = np.concatenate([cells[c]['y'] for c in train_ids])
-    ptr = np.stack([np.repeat(cells[c]['proto'][None, :], len(cells[c]['y']), 0)
-                    for c in train_ids]).reshape(-1, 4)
+    ptr = np.concatenate([np.repeat(cells[c]['proto'][None, :], len(cells[c]['y']), 0)
+                          for c in train_ids], axis=0)
     atr = np.concatenate([cells[c]['aux'] for c in train_ids])
     N, Lw, D = Xtr.shape
     fs = MinMaxScaler().fit(Xtr.reshape(-1, D))
