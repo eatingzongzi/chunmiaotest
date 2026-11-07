@@ -284,11 +284,14 @@ class SMoELSTM(nn.Module):
                  lstm_layers: int = 2, dropout: float = 0.1,
                  evidence_hidden: int = 64, gate_hidden: int = 0,
                  bidirectional: bool = False, use_attention: bool = False,
-                 multitask: bool = False):
+                 multitask: bool = False, film_dim: int = 0):
         super().__init__()
         self.bidirectional = bidirectional
         self.use_attention = use_attention
         self.multitask = multitask
+        self.film_dim = film_dim
+        if film_dim > 0:
+            self.film_net = nn.Linear(film_dim, 2 * hidden_dim)
 
         # ── LSTM encoder ──────────────────────────────────────────
         self.lstm = nn.LSTM(
@@ -348,7 +351,8 @@ class SMoELSTM(nn.Module):
 
     def forward(self, x: torch.Tensor,
                 return_gates: bool = False,
-                return_aux: bool = False) -> Tuple:
+                return_aux: bool = False,
+                film_stats: torch.Tensor = None) -> Tuple:
         """Forward pass.
 
         Args:
@@ -379,6 +383,12 @@ class SMoELSTM(nn.Module):
             features = self.lstm_proj(torch.cat([fwd, bwd], dim=-1))   # (B, H)
         else:
             features = h_n[-1]                           # (B, H)
+
+        # FiLM conditioning: modulate by cell-level statistics
+        if self.film_dim > 0 and film_stats is not None:
+            film = self.film_net(film_stats)             # (B, 2H)
+            scale, shift = film.chunk(2, dim=-1)
+            features = features * (1.0 + torch.tanh(scale)) + shift
 
         aux = None
         if self.multitask:
